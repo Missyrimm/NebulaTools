@@ -4,7 +4,7 @@ import Nebula 1.0
 Item {
     id: root
     anchors.fill: parent
-    z: -2
+    // ФИКС: z-index убран, управляется из Main.qml
 
     property int tick: 0
 
@@ -50,14 +50,8 @@ Item {
 
                 SequentialAnimation on opacity {
                     loops: Animation.Infinite
-                    NumberAnimation {
-                        to: 0.03
-                        duration: 2000 + ((index * 173) % 3500)
-                    }
-                    NumberAnimation {
-                        to: 0.5
-                        duration: 2000 + ((index * 173) % 3500)
-                    }
+                    NumberAnimation { to: 0.03; duration: 2000 + ((index * 173) % 3500) }
+                    NumberAnimation { to: 0.5; duration: 2000 + ((index * 173) % 3500) }
                 }
             }
         }

@@ -21,7 +21,7 @@ Window {
 
     readonly property var pageNames: [
         "Главная", "FLP Converter", "Сэмплы", "Генератор MIDI",
-        "Рандомная нарезка", "Разделение стемов", "Настройки", "О программе"
+        "Рандомная нарезка", "BPM & Key Finder", "Разделение стемов", "Настройки", "О программе"
     ]
 
     onClosing: function(close) {
@@ -46,17 +46,26 @@ Window {
     Rectangle {
         id: windowRoot
         anchors.fill: parent
-        color: Theme.bg
+        color: "transparent" // ФИКС: Делаем прозрачным
         radius: Theme.radiusXl
         border.color: Theme.border
         border.width: 1
         clip: true
 
-        // Фоновые эффекты
-        CursorGlow { id: cursorGlow }
-        StarField { id: starField }
+        // ФИКС: Непрозрачный фон вынесен назад
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.bg
+            radius: Theme.radiusXl
+            z: -5
+        }
+
+        // ФИКС: Эффекты теперь видны поверх фона
+        CursorGlow { id: cursorGlow; z: -2 }
+        StarField { id: starField; z: -1 }
 
         ColumnLayout {
+            z: 1 // Контент всегда поверх эффектов
             anchors.fill: parent
             spacing: 0
 
@@ -65,14 +74,45 @@ Window {
                 Layout.fillWidth: true
                 sectionName: pageNames[sidebar.currentIndex]
                 onMinimizeClicked: root.showMinimized()
-                onMaximizeClicked: root.visibility === Window.Maximized
-                    ? root.showNormal() : root.showMaximized()
+                onMaximizeClicked: root.visibility === Window.Maximized ? root.showNormal() : root.showMaximized()
                 onCloseClicked: root.close()
             }
 
             Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
 
-            // Баннер обновления
+            // Глобальный индикатор занятости
+            Rectangle {
+                id: busyBar
+                Layout.fillWidth: true
+                height: backend.isBusy ? 3 : 0
+                color: "transparent"
+                clip: true
+
+                Behavior on height { NumberAnimation { duration: 150 } }
+
+                Rectangle {
+                    width: parent.width * 0.3
+                    height: parent.height
+                    radius: 1.5
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "transparent" }
+                        GradientStop { position: 0.5; color: Theme.accent }
+                        GradientStop { position: 1.0; color: "transparent" }
+                    }
+                    x: -width
+
+                    SequentialAnimation on x {
+                        running: backend.isBusy
+                        loops: Animation.Infinite
+                        NumberAnimation { from: -parent.width * 0.3; to: parent.width; duration: 1200; easing.type: Easing.InOutQuad }
+                        PauseAnimation { duration: 200 }
+                    }
+                }
+            }
+
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
+
             Rectangle {
                 id: updateBanner
                 Layout.fillWidth: true
@@ -163,9 +203,10 @@ Window {
                     SamplesPage { anchors.fill: parent; visible: sidebar.currentIndex === 2 }
                     MelodyPage { anchors.fill: parent; visible: sidebar.currentIndex === 3 }
                     BeatmakerPage { anchors.fill: parent; visible: sidebar.currentIndex === 4 }
-                    StemsPage { anchors.fill: parent; visible: sidebar.currentIndex === 5 }
-                    SettingsPage { anchors.fill: parent; visible: sidebar.currentIndex === 6 }
-                    AboutPage { anchors.fill: parent; visible: sidebar.currentIndex === 7 }
+                    BpmKeyPage { anchors.fill: parent; visible: sidebar.currentIndex === 5 }
+                    StemsPage { anchors.fill: parent; visible: sidebar.currentIndex === 6 }
+                    SettingsPage { anchors.fill: parent; visible: sidebar.currentIndex === 7 }
+                    AboutPage { anchors.fill: parent; visible: sidebar.currentIndex === 8 }
                 }
             }
 
@@ -181,7 +222,7 @@ Window {
             property int edges: 0
             onPressed: root.startSystemResize(edges)
         }
-        EdgeHandle { edges: Qt.LeftEdge; anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 4; cursorShape: Qt.SizeHorCursor; z: 10000 }
+        EdgeHandle { edges: Qt.LeftEdge; anchors.left: windowRoot.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 4; cursorShape: Qt.SizeHorCursor; z: 10000 }
         EdgeHandle { edges: Qt.RightEdge; anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 4; cursorShape: Qt.SizeHorCursor; z: 10000 }
         EdgeHandle { edges: Qt.TopEdge; anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 4; cursorShape: Qt.SizeVerCursor; z: 10000 }
         EdgeHandle { edges: Qt.BottomEdge; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 4; cursorShape: Qt.SizeVerCursor; z: 10000 }
@@ -201,24 +242,18 @@ Window {
             Text {
                 Layout.fillWidth: true
                 text: "Сейчас скачивается обновление. Если закрыть приложение — загрузка прервётся."
-                color: Theme.textPrimary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontBody
-                wrapMode: Text.WordWrap
+                color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontBody; wrapMode: Text.WordWrap
             }
             RowLayout {
-                Layout.alignment: Qt.AlignRight
-                spacing: Theme.spaceS
+                Layout.alignment: Qt.AlignRight; spacing: Theme.spaceS
                 Rectangle {
-                    width: 120; height: 36; radius: Theme.radiusSmall
-                    color: "transparent"; border.color: Theme.border; border.width: 1
+                    width: 120; height: 36; radius: Theme.radiusSmall; color: "transparent"; border.color: Theme.border; border.width: 1
                     Text { anchors.centerIn: parent; text: "Подождать"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall }
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: closeWarningDialog.close() }
                 }
                 Rectangle {
-                    width: 140; height: 36; radius: Theme.radiusSmall
-                    color: Theme.error
+                    width: 140; height: 36; radius: Theme.radiusSmall; color: Theme.error
                     Text { anchors.centerIn: parent; text: "Всё равно закрыть"; color: "#FFFFFF"; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall; font.weight: Font.DemiBold }
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: { root.forceClose = true; root.close() } }

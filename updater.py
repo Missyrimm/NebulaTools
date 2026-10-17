@@ -90,7 +90,7 @@ def _extract(archive, url, tmp_dir, progress_callback=None):
     log(f"Распаковка → {extract_dir}")
 
     if progress_callback:
-        progress_callback(90)  # Начинаем с 90%
+        progress_callback(90)
 
     try:
         if url.endswith(".zip"):
@@ -104,7 +104,11 @@ def _extract(archive, url, tmp_dir, progress_callback=None):
         else:
             import tarfile
             with tarfile.open(archive, "r:gz") as t:
-                t.extractall(extract_dir, filter='data')
+                # filter='data' добавлен в Python 3.11.4+, для старых версий игнорируем
+                try:
+                    t.extractall(extract_dir, filter='data')
+                except TypeError:
+                    t.extractall(extract_dir)
     except Exception as e:
         log(f"Ошибка распаковки: {e}")
         raise
@@ -140,66 +144,70 @@ def download_update(url, progress_callback=None):
         # Fallback на однопоточную
         r = requests.get(url, stream=True, timeout=180)
         r.raise_for_status()
+        done = 0
         with open(archive, "wb") as f:
             for chunk in r.iter_content(65536):
                 if chunk:
                     f.write(chunk)
+                    done += len(chunk)
+                    if progress_callback and total_size > 0:
+                        pct = int(done * 100 / total_size)
+                        progress_callback(min(99, pct))
+    else:
+        # Многопоточная загрузка
+        NUM_THREADS = 8
+        chunk_size = total_size // NUM_THREADS + 1
+        chunks = [(i * chunk_size, min((i + 1) * chunk_size - 1, total_size - 1))
+                  for i in range(NUM_THREADS)]
+        chunks = [(s, e) for s, e in chunks if s <= e]
+
+        with open(archive, "wb") as f:
+            f.truncate(total_size)
+
+        progress_lock = threading.Lock()
+        done = [0]
+        start_time = time.time()
+
+        def download_chunk(idx, start, end):
+            headers = {"Range": f"bytes={start}-{end}"}
+            for attempt in range(3):
+                try:
+                    r = requests.get(url, headers=headers, stream=True, timeout=180)
+                    r.raise_for_status()
+                    with open(archive, "r+b") as f:
+                        f.seek(start)
+                        for chunk in r.iter_content(65536):
+                            if not chunk:
+                                continue
+                            f.write(chunk)
+                            with progress_lock:
+                                done[0] += len(chunk)
+                                if progress_callback and total_size > 0:
+                                    pct = int(done[0] * 100 / total_size)
+                                    progress_callback(min(99, pct))
+                    return
+                except Exception as e:
+                    log(f"  чанк {idx} попытка {attempt + 1}: {e}")
+                    time.sleep(1)
+            raise RuntimeError(f"Не удалось скачать чанк {idx}")
+
+        with ThreadPoolExecutor(max_workers=NUM_THREADS) as pool:
+            futures = [pool.submit(download_chunk, i, s, e)
+                       for i, (s, e) in enumerate(chunks)]
+            for f in futures:
+                f.result()
+
+        elapsed = time.time() - start_time
+        speed = total_size / elapsed / 1024 / 1024 if elapsed > 0 else 0
+        log(f"Скачано {total_size / 1024 / 1024:.1f} МБ за {elapsed:.1f}с "
+            f"({speed:.1f} МБ/с)")
+
     # После загрузки — распаковка с прогрессом 70-100%
     def unpack_progress(p):
         if progress_callback:
             progress_callback(70 + int(p * 0.3))
 
     return _extract(archive, url, tmp_dir, progress_callback=unpack_progress)
-
-    # Многопоточная
-    NUM_THREADS = 8
-    chunk_size = total_size // NUM_THREADS + 1
-    chunks = [(i * chunk_size, min((i + 1) * chunk_size - 1, total_size - 1))
-              for i in range(NUM_THREADS)]
-    chunks = [(s, e) for s, e in chunks if s <= e]
-
-    with open(archive, "wb") as f:
-        f.truncate(total_size)
-
-    progress_lock = threading.Lock()
-    done = [0]
-    start_time = time.time()
-
-    def download_chunk(idx, start, end):
-        headers = {"Range": f"bytes={start}-{end}"}
-        for attempt in range(3):
-            try:
-                r = requests.get(url, headers=headers, stream=True, timeout=180)
-                r.raise_for_status()
-                with open(archive, "r+b") as f:
-                    f.seek(start)
-                    for chunk in r.iter_content(65536):
-                        if not chunk:
-                            continue
-                        f.write(chunk)
-                        with progress_lock:
-                            done[0] += len(chunk)
-                            if progress_callback and total_size > 0:
-                                pct = int(done[0] * 100 / total_size)
-                                progress_callback(min(99, pct))
-                return
-            except Exception as e:
-                log(f"  чанк {idx} попытка {attempt + 1}: {e}")
-                time.sleep(1)
-        raise RuntimeError(f"Не удалось скачать чанк {idx}")
-
-    with ThreadPoolExecutor(max_workers=NUM_THREADS) as pool:
-        futures = [pool.submit(download_chunk, i, s, e)
-                   for i, (s, e) in enumerate(chunks)]
-        for f in futures:
-            f.result()
-
-    elapsed = time.time() - start_time
-    speed = total_size / elapsed / 1024 / 1024 if elapsed > 0 else 0
-    log(f"Скачано {total_size / 1024 / 1024:.1f} МБ за {elapsed:.1f}с "
-        f"({speed:.1f} МБ/с)")
-
-    return _extract(archive, url, tmp_dir)
 
 
 def run_update_script(extract_dir):

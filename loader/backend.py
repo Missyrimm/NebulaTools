@@ -1,6 +1,3 @@
-"""
-Loader backend — проверка обновлений, скачивание, распаковка, запуск NebulaTools.
-"""
 import sys
 import os
 import shutil
@@ -13,13 +10,12 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
-from PySide6.QtCore import QObject, Signal, Slot, QSettings
-
+from PySide6.QtCore import QObject, Signal, Slot, QSettings, Property
 
 GITHUB_REPO = "Missyrimm/NebulaTools"
 APP_NAME = "NebulaTools"
 
-# Папка установки
+# Папка установки для текущей ОС
 if sys.platform == "win32":
     INSTALL_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / APP_NAME
 elif sys.platform == "darwin":
@@ -35,37 +31,59 @@ ASSETS = {
 
 VERSION_FILE = INSTALL_DIR / "version.txt"
 
-
 def log(msg):
     print(f"[loader] {msg}", flush=True)
 
-
 class LoaderBackend(QObject):
     checking = Signal()
-    ready = Signal(str)               # local_version
-    noInstall = Signal(str)           # remote_version
-    updateAvailable = Signal(str, str)  # local_version, remote_version
-    downloadStarted = Signal(str)     # total_mb
-    downloadProgress = Signal(int, float)  # progress, speed_mb
+    ready = Signal(str)               
+    noInstall = Signal(str)           
+    updateAvailable = Signal(str, str)
+    downloadStarted = Signal(str)     
+    downloadProgress = Signal(int, float)
     extracting = Signal()
     extractProgress = Signal(int)
     launched = Signal()
     errorOccurred = Signal(str)
+    
+    targetOsChanged = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._remote_version = ""
         self._download_url = ""
+        
+        # Автоопределение текущей ОС
+        if sys.platform.startswith("win"):
+            self._target_os = "win32"
+        elif sys.platform == "darwin":
+            self._target_os = "darwin"
+        else:
+            self._target_os = "linux"
 
-    # ---------- Проверка установки ----------
+    @Property(str, notify=targetOsChanged)
+    def targetOs(self):
+        return self._target_os
+
+    @Slot(str)
+    def setTargetOs(self, os_key):
+        if self._target_os != os_key:
+            self._target_os = os_key
+            self.targetOsChanged.emit()
+            self.checkInstallation()  # Перепроверяем при смене ОС
+
+    def _is_current_os(self):
+        current = "win32" if sys.platform.startswith("win") else ("darwin" if sys.platform == "darwin" else "linux")
+        return self._target_os == current
+
     @Slot()
     def checkInstallation(self):
         def _do():
             self.checking.emit()
             try:
-                # 1. Локальная версия
+                # 1. Локальная версия (только если выбрана текущая ОС)
                 local = ""
-                if VERSION_FILE.exists():
+                if self._is_current_os() and VERSION_FILE.exists():
                     try:
                         local = VERSION_FILE.read_text(encoding="utf-8").strip()
                     except Exception:
@@ -89,21 +107,22 @@ class LoaderBackend(QObject):
 
                 self._remote_version = remote
 
-                # URL ассета
-                asset_name = ASSETS.get(self._platform_key())
+                # URL ассета на основе выбранной ОС
+                asset_name = ASSETS.get(self._target_os)
                 for asset in data.get("assets", []):
                     if asset["name"] == asset_name:
                         self._download_url = asset["browser_download_url"]
                         break
 
                 if not self._download_url:
-                    self.errorOccurred.emit(
-                        f"Ассет {asset_name} не найден в релизе"
-                    )
+                    self.errorOccurred.emit(f"Ассет {asset_name} не найден в релизе")
                     return
 
-                # 3. Сравнение
-                if not local:
+                # 3. Сравнение (если текущая ОС)
+                if not self._is_current_os():
+                    # Если выбрана другая ОС — просто предлагаем скачать
+                    self.noInstall.emit(remote)
+                elif not local:
                     self.noInstall.emit(remote)
                 elif self._parse_version(local) >= self._parse_version(remote):
                     self.ready.emit(local)
@@ -116,7 +135,6 @@ class LoaderBackend(QObject):
 
         threading.Thread(target=_do, daemon=True).start()
 
-    # ---------- Скачивание и установка ----------
     @Slot()
     def downloadAndInstall(self):
         def _do():
@@ -125,20 +143,26 @@ class LoaderBackend(QObject):
                     self.errorOccurred.emit("Нет URL для скачивания")
                     return
 
-                # 1. HEAD — узнаём размер
-                head = requests.head(self._download_url, allow_redirects=True, timeout=15)
-                total_size = int(head.headers.get("content-length", 0))
-                total_mb = total_size / 1024 / 1024 if total_size else 0
-                self.downloadStarted.emit(f"{total_mb:.1f}")
-
-                # 2. Многопоточная загрузка
-                tmp_dir = INSTALL_DIR / "_update_tmp"
+                is_cross = not self._is_current_os()
+                base_dir = Path.home() / "Downloads" if is_cross else INSTALL_DIR
+                folder_name = f"{APP_NAME}-{self._target_os}" if is_cross else "_update_tmp"
+                
+                tmp_dir = base_dir / folder_name
+                
+                # Очищаем папку перед скачиванием
                 if tmp_dir.exists():
                     shutil.rmtree(tmp_dir)
                 tmp_dir.mkdir(parents=True, exist_ok=True)
 
                 archive = tmp_dir / "archive.bin"
 
+                # 1. HEAD
+                head = requests.head(self._download_url, allow_redirects=True, timeout=15)
+                total_size = int(head.headers.get("content-length", 0))
+                total_mb = total_size / 1024 / 1024 if total_size else 0
+                self.downloadStarted.emit(f"{total_mb:.1f}")
+
+                # 2. Скачивание
                 if total_size > 1024 * 1024 and total_size < 500 * 1024 * 1024:
                     self._multithread_download(self._download_url, archive, total_size)
                 else:
@@ -150,7 +174,22 @@ class LoaderBackend(QObject):
                 extract_dir.mkdir()
                 self._extract(archive, extract_dir)
 
-                # 4. Копируем в INSTALL_DIR
+                if is_cross:
+                    # Если это другая ОС — просто оставляем в Загрузках
+                    self.extractProgress.emit(100)
+                    if sys.platform == "win32":
+                        subprocess.Popen(["explorer", str(tmp_dir)])
+                    elif sys.platform == "darwin":
+                        subprocess.Popen(["open", str(tmp_dir)])
+                    else:
+                        subprocess.Popen(["xdg-open", str(tmp_dir)])
+                    
+                    from PySide6.QtWidgets import QApplication
+                    from PySide6.QtCore import QMetaObject, Qt
+                    QMetaObject.invokeMethod(QApplication.instance(), "quit", Qt.QueuedConnection)
+                    return
+
+                # 4. Копируем в INSTALL_DIR (только для текущей ОС)
                 INSTALL_DIR.mkdir(parents=True, exist_ok=True)
                 total_files = sum(1 for _ in extract_dir.rglob("*") if _.is_file())
                 done = 0
@@ -178,7 +217,6 @@ class LoaderBackend(QObject):
                 time.sleep(0.5)
                 self._launch_app()
 
-                # Закрываем лоадер через 1.5 сек
                 time.sleep(1.5)
                 from PySide6.QtWidgets import QApplication
                 from PySide6.QtCore import QMetaObject, Qt
@@ -192,7 +230,6 @@ class LoaderBackend(QObject):
 
         threading.Thread(target=_do, daemon=True).start()
 
-    # ---------- Запуск ----------
     @Slot()
     def launchApp(self):
         self._launch_app()
@@ -204,22 +241,15 @@ class LoaderBackend(QObject):
     @Slot()
     def openInstallFolder(self):
         try:
+            path_to_open = INSTALL_DIR if self._is_current_os() else Path.home() / "Downloads"
             if sys.platform == "win32":
-                subprocess.Popen(["explorer", str(INSTALL_DIR)])
+                subprocess.Popen(["explorer", str(path_to_open)])
             elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(INSTALL_DIR)])
+                subprocess.Popen(["open", str(path_to_open)])
             else:
-                subprocess.Popen(["xdg-open", str(INSTALL_DIR)])
+                subprocess.Popen(["xdg-open", str(path_to_open)])
         except Exception as e:
             log(f"openInstallFolder: {e}")
-
-    # ---------- Helpers ----------
-    def _platform_key(self):
-        if sys.platform.startswith("win"):
-            return "win32"
-        elif sys.platform == "darwin":
-            return "darwin"
-        return "linux"
 
     def _parse_version(self, v):
         try:

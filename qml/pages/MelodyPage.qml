@@ -45,7 +45,6 @@ Item {
             Layout.fillHeight: true
             spacing: Theme.spaceL
 
-            // Левая колонка — параметры
             CardWithPreview {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -93,7 +92,6 @@ Item {
                 Item { Layout.fillHeight: true }
             }
 
-            // Правая колонка — справка + кнопка
             ColumnLayout {
                 Layout.preferredWidth: 400
                 Layout.fillHeight: true
@@ -178,21 +176,31 @@ Item {
         fileMode: FileDialog.SaveFile
         defaultSuffix: "mid"
         nameFilters: ["MIDI (*.mid)", "Все файлы (*)"]
-        onAccepted: page.doGenerate(selectedFile.toString())
+        onAccepted: {
+            page.status = "Генерация..."
+            page.statusError = false
+            backend.generateMelodyTo(
+                keyCombo.currentText, scaleCombo.currentText, genreCombo.currentText,
+                barsSpin.value, bpmSpin.value, selectedFile.toString()
+            )
+        }
+    }
+
+    Connections {
+        target: backend
+        function onMelodyGenerated(res) {
+            page.status = "Сохранено: " + res.path
+            page.statusError = false
+        }
+        function onMelodyError(msg) {
+            page.status = "Ошибка: " + msg
+            page.statusError = true
+        }
     }
 
     function askSave() {
         var ts = Math.floor(Date.now() / 1000)
         saveDialog.currentFile = "file:///melody_" + keyCombo.currentText + "_" + scaleCombo.currentText + "_" + ts + ".mid"
         saveDialog.open()
-    }
-
-    function doGenerate(path) {
-        var r = backend.generateMelodyTo(
-            keyCombo.currentText, scaleCombo.currentText, genreCombo.currentText,
-            barsSpin.value, bpmSpin.value, path
-        )
-        if (r.ok) { page.status = "Сохранено: " + r.path; page.statusError = false }
-        else { page.status = "Ошибка: " + r.error; page.statusError = true }
     }
 }

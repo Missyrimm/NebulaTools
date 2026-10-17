@@ -7,11 +7,11 @@ import "components"
 Window {
     id: root
     width: 520
-    height: 620
+    height: 650 // Увеличили высоту из-за добавления ComboBox
     minimumWidth: 520
-    minimumHeight: 620
+    minimumHeight: 650
     maximumWidth: 520
-    maximumHeight: 620
+    maximumHeight: 650
     visible: true
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
@@ -60,9 +60,9 @@ Window {
                 Layout.fillWidth: true
                 Layout.leftMargin: 48
                 Layout.rightMargin: 48
-                spacing: 24
+                spacing: 20 // Чуть уменьшили отступ
 
-                // Лого + кольцо
+                // Логотип с кольцом
                 Item {
                     Layout.alignment: Qt.AlignHCenter
                     width: 160
@@ -74,14 +74,15 @@ Window {
                         label: ""
                     }
 
-                    // Морковка по центру
-                    Text {
+                    // ИКОНКА ИЗ ПАПКИ ASSETS
+                    Image {
                         anchors.centerIn: parent
-                        text: "🥕"
-                        font.pixelSize: 54
+                        source: "../assets/icons/logo.png"
+                        sourceSize.width: 80
+                        sourceSize.height: 80
+                        fillMode: Image.PreserveAspectFit
                     }
 
-                    // Анимация — пульсация во время активных состояний
                     Rectangle {
                         anchors.centerIn: parent
                         width: 180
@@ -115,16 +116,96 @@ Window {
                     font.letterSpacing: -0.5
                 }
 
+                // ВЫБОР ОС
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 10
+                    
+                    Text {
+                        text: "ОС:"
+                        color: Theme.textSecondary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontBody
+                    }
+
+                    ComboBox {
+                        id: osCombo
+                        width: 200
+                        height: 36
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontBody
+                        
+                        model: [
+                            { key: "win32", name: "Windows" },
+                            { key: "darwin", name: "macOS" },
+                            { key: "linux", name: "Linux" }
+                        ]
+                        textRole: "name"
+                        valueRole: "key"
+                        
+                        currentIndex: {
+                            for (var i = 0; i < model.length; i++) {
+                                if (model[i].key === backend.targetOs) return i;
+                            }
+                            return 0;
+                        }
+
+                        onActivated: {
+                            backend.setTargetOs(currentValue)
+                        }
+
+                        background: Rectangle {
+                            color: Theme.surface
+                            border.color: Theme.border
+                            border.width: 1
+                            radius: Theme.radiusSmall
+                        }
+
+                        contentItem: Text {
+                            leftPadding: 12
+                            text: osCombo.displayText
+                            color: Theme.textPrimary
+                            font: osCombo.font
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        popup: Popup {
+                            y: osCombo.height + 4
+                            width: osCombo.width
+                            padding: 4
+                            background: Rectangle { color: Theme.surfaceHover; radius: 8; border.color: Theme.border }
+                            contentItem: ListView {
+                                clip: true
+                                implicitHeight: contentHeight
+                                model: osCombo.delegateModel
+                            }
+                        }
+                        
+                        delegate: ItemDelegate {
+                            width: osCombo.width - 8
+                            height: 32
+                            contentItem: Text {
+                                text: modelData.name
+                                color: parent.highlighted ? Theme.accent : Theme.textPrimary
+                                font: osCombo.font
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: 8
+                            }
+                            background: Rectangle {
+                                color: parent.hovered ? Theme.surface : "transparent"
+                                radius: 4
+                            }
+                        }
+                    }
+                }
+
                 // Версия
                 Text {
                     Layout.alignment: Qt.AlignHCenter
                     text: {
-                        if (root.state === "ready")
-                            return "Версия " + root.localVersion
-                        if (root.state === "update_available")
-                            return "Доступна " + root.remoteVersion
-                        if (root.remoteVersion !== "")
-                            return "Версия " + root.remoteVersion
+                        if (root.state === "ready") return "Версия " + root.localVersion
+                        if (root.state === "update_available") return "Доступна " + root.remoteVersion
+                        if (root.remoteVersion !== "") return "Версия " + root.remoteVersion
                         return "MUSIC PRODUCTION TOOLKIT"
                     }
                     color: Theme.textSecondary
@@ -132,9 +213,9 @@ Window {
                     font.pixelSize: Theme.fontBody
                 }
 
-                Item { Layout.preferredHeight: 12 }
+                Item { Layout.preferredHeight: 4 }
 
-                // Прогресс-бар (виден в download/extracting)
+                // Прогресс-бар
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 6
@@ -154,7 +235,7 @@ Window {
                     }
                 }
 
-                // Статус-текст
+                // Статус
                 Text {
                     Layout.alignment: Qt.AlignHCenter
                     Layout.fillWidth: true
@@ -168,7 +249,7 @@ Window {
                     visible: root.statusText !== ""
                 }
 
-                // Скорость скачивания
+                // Скорость
                 Text {
                     Layout.alignment: Qt.AlignHCenter
                     text: root.downloadSpeed > 0
@@ -180,9 +261,9 @@ Window {
                     visible: root.state === "download" && root.downloadSpeed > 0
                 }
 
-                Item { Layout.preferredHeight: 16 }
+                Item { Layout.preferredHeight: 8 }
 
-                // Кнопка действия
+                // Кнопка
                 Rectangle {
                     id: actionBtn
                     Layout.fillWidth: true
@@ -217,10 +298,14 @@ Window {
                         }
                         Text {
                             text: {
+                                var is_cross = backend.targetOs !== (Qt.platform.os === "windows" ? "win32" : (Qt.platform.os === "osx" ? "darwin" : "linux"));
+                                
                                 if (root.state === "checking") return "Проверка..."
                                 if (root.state === "ready") return "Запустить NebulaTools"
-                                if (root.state === "no_install") return "Установить"
-                                if (root.state === "update_available") return "Обновить до " + root.remoteVersion
+                                if (root.state === "no_install" || root.state === "update_available") {
+                                    if (is_cross) return "Скачать для " + osCombo.currentText;
+                                    return (root.state === "update_available") ? "Обновить до " + root.remoteVersion : "Установить";
+                                }
                                 if (root.state === "download") return "Скачивание " + root.progress + "%"
                                 if (root.state === "extracting") return "Распаковка " + root.progress + "%"
                                 if (root.state === "launching") return "Запуск..."
@@ -238,7 +323,7 @@ Window {
                     TapHandler { onTapped: root.onAction() }
                 }
 
-                // Кнопка "Открыть папку установки" (видна в ready)
+                // Кнопка "Открыть папку"
                 Text {
                     Layout.alignment: Qt.AlignHCenter
                     text: "Открыть папку установки"
@@ -336,7 +421,13 @@ Window {
             root.state = "no_install"
             root.remoteVersion = remoteVer
             root.progress = 0
-            root.statusText = "NebulaTools не установлен. Нажми Установить."
+            
+            var is_cross = backend.targetOs !== (Qt.platform.os === "windows" ? "win32" : (Qt.platform.os === "osx" ? "darwin" : "linux"));
+            if (is_cross) {
+                root.statusText = "Будет скачана версия для " + osCombo.currentText + " (в папку Загрузки)."
+            } else {
+                root.statusText = "NebulaTools не установлен. Нажми Установить."
+            }
         }
 
         function onUpdateAvailable(localVer, remoteVer) {

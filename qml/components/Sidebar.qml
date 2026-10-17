@@ -10,7 +10,6 @@ Rectangle {
 
     property int currentIndex: 0
 
-    // Правая разделительная линия
     Rectangle {
         anchors.right: parent.right
         width: 1
@@ -18,7 +17,6 @@ Rectangle {
         color: Theme.border
     }
 
-    // ═══════ ЛОГО + НАЗВАНИЕ ═══════
     Rectangle {
         id: logoBox
         width: parent.width
@@ -35,7 +33,6 @@ Rectangle {
                 width: 32; height: 32
                 radius: 8
                 color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.15)
-
                 Text {
                     anchors.centerIn: parent
                     text: "\uE8AB"
@@ -44,7 +41,6 @@ Rectangle {
                     color: Theme.accent
                 }
             }
-
             Text {
                 text: "NebulaTools"
                 color: Theme.textPrimary
@@ -56,14 +52,39 @@ Rectangle {
         }
     }
 
-    // ═══════ НАВИГАЦИЯ ═══════
+    Rectangle {
+        id: indicator
+        width: 3
+        height: 22
+        radius: 1.5
+        color: Theme.accent
+        x: 0
+        opacity: sidebar.visible && currentIndex >= 0 ? 1 : 0
+
+        property Item activeBtn: {
+            for (var i = 0; i < topRepeater.count; i++) {
+                var item = topRepeater.itemAt(i)
+                if (item && item.navIndex === sidebar.currentIndex) return item
+            }
+            for (var j = 0; j < bottomRepeater.count; j++) {
+                var item2 = bottomRepeater.itemAt(j)
+                if (item2 && item2.navIndex === sidebar.currentIndex) return item2
+            }
+            return null
+        }
+
+        y: activeBtn ? activeBtn.mapToItem(sidebar, 0, 0).y + (activeBtn.height - height) / 2 : 0
+        Behavior on y { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+    }
+
     readonly property var items: [
-        { label: "Главная",             glyph: "\uE80F", accent: Theme.accent },
-        { label: "FLP Converter",       glyph: "\uE8AB", accent: Theme.accent },
-        { label: "Сэмплы",              glyph: "\uE8D6", accent: Theme.accent },
-        { label: "Генератор MIDI",      glyph: "\uE7F4", accent: Theme.accent },
-        { label: "Рандомная нарезка",   glyph: "\uE768", accent: Theme.accent },
-        { label: "Разделение стемов",   glyph: "\uE8F1", accent: Theme.accent }
+        { label: "Главная",             glyph: "\uE80F" },
+        { label: "FLP Converter",       glyph: "\uE8AB" },
+        { label: "Сэмплы",              glyph: "\uE8D6" },
+        { label: "Генератор MIDI",      glyph: "\uE7F4" },
+        { label: "Рандомная нарезка",   glyph: "\uE768" },
+        { label: "BPM & Key Finder",   glyph: "\uE9D9" },
+        { label: "Разделение стемов",   glyph: "\uE8F1" }
     ]
 
     readonly property var bottomItems: [
@@ -75,24 +96,6 @@ Rectangle {
     readonly property int btnSpacing: 2
     readonly property int topMargin: 8
 
-    // Активный индикатор — вертикальная полоска
-    Rectangle {
-        id: indicator
-        width: 3
-        height: 22
-        radius: 1.5
-        color: sidebar.items[currentIndex] ? sidebar.items[currentIndex].accent : Theme.accent
-        x: 0
-        y: logoBox.height + topMargin + currentIndex * (btnHeight + btnSpacing)
-           + (btnHeight - height) / 2
-
-        Behavior on y {
-            NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic }
-        }
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
-    }
-
-    // Основные пункты
     Column {
         id: navColumn
         anchors.top: logoBox.bottom
@@ -102,19 +105,18 @@ Rectangle {
         spacing: sidebar.btnSpacing
 
         Repeater {
+            id: topRepeater
             model: sidebar.items
             delegate: Rectangle {
                 id: navItem
                 required property var modelData
                 required property int index
+                property int navIndex: index
 
                 width: parent.width
                 height: sidebar.btnHeight
-                color: sidebar.currentIndex === index
-                    ? Qt.rgba(modelData.accent.r, modelData.accent.g, modelData.accent.b, 0.10)
-                    : (hov.hovered ? Theme.surfaceHover : "transparent")
+                color: sidebar.currentIndex === navIndex ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.10) : (hov.hovered ? Theme.surfaceHover : "transparent")
                 radius: Theme.radiusSmall
-
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
                 RowLayout {
@@ -125,37 +127,28 @@ Rectangle {
 
                     Text {
                         text: modelData.glyph
-                        color: sidebar.currentIndex === index
-                            ? modelData.accent
-                            : Theme.textSecondary
+                        color: sidebar.currentIndex === navIndex ? Theme.accent : Theme.textSecondary
                         font.family: Theme.iconFamily
                         font.pixelSize: 15
                         Behavior on color { ColorAnimation { duration: Theme.animFast } }
                     }
-
                     Text {
                         Layout.fillWidth: true
                         text: modelData.label
-                        color: sidebar.currentIndex === index
-                            ? Theme.textPrimary
-                            : Theme.textSecondary
+                        color: sidebar.currentIndex === navIndex ? Theme.textPrimary : Theme.textSecondary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontBody
-                        font.weight: sidebar.currentIndex === index
-                            ? Font.DemiBold
-                            : Font.Normal
+                        font.weight: sidebar.currentIndex === navIndex ? Font.DemiBold : Font.Normal
                         elide: Text.ElideRight
                         Behavior on color { ColorAnimation { duration: Theme.animFast } }
                     }
                 }
-
                 HoverHandler { id: hov; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: sidebar.currentIndex = navItem.index }
+                TapHandler { onTapped: sidebar.currentIndex = navItem.navIndex }
             }
         }
     }
 
-    // Нижние пункты
     Column {
         id: bottomColumn
         anchors.bottom: parent.bottom
@@ -172,20 +165,18 @@ Rectangle {
         }
 
         Repeater {
+            id: bottomRepeater
             model: sidebar.bottomItems
             delegate: Rectangle {
                 id: bottomItem
                 required property var modelData
                 required property int index
-                readonly property int globalIndex: sidebar.items.length + index
+                property int navIndex: sidebar.items.length + index
 
                 width: parent.width
                 height: sidebar.btnHeight
-                color: sidebar.currentIndex === globalIndex
-                    ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.10)
-                    : (hovB.hovered ? Theme.surfaceHover : "transparent")
+                color: sidebar.currentIndex === navIndex ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.10) : (hovB.hovered ? Theme.surfaceHover : "transparent")
                 radius: Theme.radiusSmall
-
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
                 RowLayout {
@@ -196,27 +187,21 @@ Rectangle {
 
                     Text {
                         text: modelData.glyph
-                        color: sidebar.currentIndex === globalIndex
-                            ? Theme.accent
-                            : Theme.textSecondary
+                        color: sidebar.currentIndex === navIndex ? Theme.accent : Theme.textSecondary
                         font.family: Theme.iconFamily
                         font.pixelSize: 15
                     }
-
                     Text {
                         Layout.fillWidth: true
                         text: modelData.label
-                        color: sidebar.currentIndex === globalIndex
-                            ? Theme.textPrimary
-                            : Theme.textSecondary
+                        color: sidebar.currentIndex === navIndex ? Theme.textPrimary : Theme.textSecondary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontBody
                         elide: Text.ElideRight
                     }
                 }
-
                 HoverHandler { id: hovB; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: sidebar.currentIndex = bottomItem.globalIndex }
+                TapHandler { onTapped: sidebar.currentIndex = bottomItem.navIndex }
             }
         }
     }

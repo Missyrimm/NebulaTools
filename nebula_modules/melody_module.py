@@ -1,6 +1,6 @@
 """
-melody_module — генератор MIDI с реальными различиями по жанрам.
-Каждый жанр — свои ритмы, плотность нот, скорость баса, аккордовые расширения.
+melody_module — 20 жанров, каждый со своей ритмической и гармонической логикой.
+Прогрессии, бас-паттерны, длительности, октавы — всё различается.
 """
 import io
 import random
@@ -26,29 +26,220 @@ SCALES = {
 KEY_NAMES = ["C", "C#", "D", "D#", "E", "F",
              "F#", "G", "G#", "A", "A#", "B"]
 
-# Каждый жанр: свои настройки ритма, плотности, баса, аккордов
+# ============================================================
+#  КОНФИГУРАЦИЯ ЖАНРОВ
+# ============================================================
+# progressions — список прогрессий (0-indexed ступени)
+# rhythm — базовые длительности нот (в долях)
+# density — вероятность появления ноты в слоте
+# bass_style — паттерн баса
+# bass_octave — октава баса относительно тоники
+# melody_octave — октава мелодии
+# chord_ext — вероятность расширений (7-я, 9-я)
+# swing — отклонение чётных нот (для свинга)
 GENRES = {
-    "pop":        {"density": 0.7, "durations": [0.5, 1.0, 1.5], "pause": 0.2, "bass": "root", "vel": (70, 100), "chord_ext": 0.1},
-    "hip-hop":    {"density": 0.5, "durations": [0.5, 1.0, 2.0], "pause": 0.3, "bass": "root5", "vel": (60, 95), "chord_ext": 0.15},
-    "trap":       {"density": 1.4, "durations": [0.25, 0.25, 0.5, 1.0], "pause": 0.1, "bass": "808", "vel": (50, 85), "chord_ext": 0.2},
-    "drill":      {"density": 1.3, "durations": [0.25, 0.5, 1.0], "pause": 0.15, "bass": "slide", "vel": (55, 90), "chord_ext": 0.15},
-    "phonk":      {"density": 0.9, "durations": [0.25, 0.5, 1.0], "pause": 0.2, "bass": "808", "vel": (60, 90), "chord_ext": 0.1},
-    "lofi":       {"density": 0.5, "durations": [0.5, 0.75, 1.0, 1.5], "pause": 0.35, "bass": "root", "vel": (55, 80), "chord_ext": 0.4},
-    "chill":      {"density": 0.4, "durations": [1.0, 1.5, 2.0], "pause": 0.4, "bass": "root", "vel": (55, 80), "chord_ext": 0.35},
-    "ambient":    {"density": 0.2, "durations": [2.0, 3.0, 4.0], "pause": 0.6, "bass": "root", "vel": (40, 65), "chord_ext": 0.5},
-    "jazz":       {"density": 0.8, "durations": [0.25, 0.5, 1.0, 2.0], "pause": 0.15, "bass": "walking", "vel": (55, 90), "chord_ext": 0.8},
-    "blues":      {"density": 0.7, "durations": [0.5, 0.75, 1.0, 1.5], "pause": 0.2, "bass": "shuffle", "vel": (65, 95), "chord_ext": 0.4},
-    "funk":       {"density": 1.2, "durations": [0.25, 0.25, 0.5, 1.0], "pause": 0.1, "bass": "syncopated", "vel": (70, 105), "chord_ext": 0.3},
-    "rnb":        {"density": 0.6, "durations": [0.5, 1.0, 1.5], "pause": 0.25, "bass": "root", "vel": (55, 85), "chord_ext": 0.7},
-    "gospel":     {"density": 0.8, "durations": [0.5, 1.0, 1.5], "pause": 0.2, "bass": "root", "vel": (60, 95), "chord_ext": 0.9},
-    "edm":        {"density": 1.0, "durations": [0.25, 0.5, 1.0], "pause": 0.15, "bass": "root8", "vel": (75, 105), "chord_ext": 0.15},
-    "house":      {"density": 0.8, "durations": [0.5, 1.0], "pause": 0.2, "bass": "root5", "vel": (75, 100), "chord_ext": 0.25},
-    "techno":     {"density": 1.0, "durations": [0.25, 0.5, 1.0], "pause": 0.2, "bass": "root", "vel": (75, 100), "chord_ext": 0.1},
-    "dnb":        {"density": 1.5, "durations": [0.125, 0.25, 0.5], "pause": 0.1, "bass": "reese", "vel": (70, 100), "chord_ext": 0.15},
-    "riddim":     {"density": 1.3, "durations": [0.25, 0.5, 1.0], "pause": 0.15, "bass": "wobble", "vel": (80, 110), "chord_ext": 0.05},
-    "epic":       {"density": 0.6, "durations": [1.0, 2.0, 3.0], "pause": 0.3, "bass": "root8", "vel": (75, 105), "chord_ext": 0.6},
-    "cinematic":  {"density": 0.4, "durations": [1.0, 2.0, 4.0], "pause": 0.4, "bass": "root", "vel": (60, 95), "chord_ext": 0.7},
+    "pop": {
+        "progressions": [[0, 4, 5, 3], [0, 5, 3, 4], [0, 3, 4, 4]],
+        "rhythm": [0.5, 1.0, 1.0, 0.5],
+        "density": 0.8,
+        "bass_style": "root5",
+        "bass_octave": -12,
+        "melody_octave": 12,
+        "chord_ext": 0.2,
+        "swing": 0,
+    },
+    "hip-hop": {
+        "progressions": [[0, 5, 3, 4], [0, 3, 5, 4], [0, 2, 5, 4]],
+        "rhythm": [0.5, 1.0, 1.5],
+        "density": 0.6,
+        "bass_style": "root",
+        "bass_octave": -24,
+        "melody_octave": 0,
+        "chord_ext": 0.3,
+        "swing": 0.1,
+    },
+    "trap": {
+        "progressions": [[0, 5, 3, 4], [0, 5, 4, 3], [0, 3, 5, 4]],
+        "rhythm": [0.25, 0.25, 0.5, 1.0],
+        "density": 1.3,
+        "bass_style": "808",
+        "bass_octave": -24,
+        "melody_octave": 12,
+        "chord_ext": 0.15,
+        "swing": 0,
+    },
+    "drill": {
+        "progressions": [[0, 3, 5, 4], [0, 5, 3, 4]],
+        "rhythm": [0.25, 0.25, 0.5, 0.5],
+        "density": 1.4,
+        "bass_style": "slide",
+        "bass_octave": -24,
+        "melody_octave": 12,
+        "chord_ext": 0.2,
+        "swing": 0,
+    },
+    "phonk": {
+        "progressions": [[0, 3, 5, 4], [0, 5, 4, 3]],
+        "rhythm": [0.25, 0.5, 0.5, 1.0],
+        "density": 1.0,
+        "bass_style": "808",
+        "bass_octave": -24,
+        "melody_octave": 0,
+        "chord_ext": 0.2,
+        "swing": 0.15,
+    },
+    "lofi": {
+        "progressions": [[0, 3, 5, 4], [1, 4, 0, 0], [0, 5, 3, 4]],
+        "rhythm": [0.5, 0.75, 1.0, 1.5],
+        "density": 0.6,
+        "bass_style": "root",
+        "bass_octave": -12,
+        "melody_octave": 12,
+        "chord_ext": 0.5,
+        "swing": 0.2,
+    },
+    "chill": {
+        "progressions": [[0, 5, 3, 4], [0, 3, 5, 4]],
+        "rhythm": [0.75, 1.0, 1.5, 2.0],
+        "density": 0.4,
+        "bass_style": "root",
+        "bass_octave": -12,
+        "melody_octave": 12,
+        "chord_ext": 0.4,
+        "swing": 0.1,
+    },
+    "ambient": {
+        "progressions": [[0, 0, 0, 0], [0, 3, 0, 3], [0, 5, 3, 0]],
+        "rhythm": [2.0, 3.0, 4.0],
+        "density": 0.25,
+        "bass_style": "root",
+        "bass_octave": -12,
+        "melody_octave": 12,
+        "chord_ext": 0.7,
+        "swing": 0,
+    },
+    "jazz": {
+        "progressions": [[1, 4, 0, 5], [0, 3, 4, 1], [1, 4, 0, 0]],
+        "rhythm": [0.25, 0.5, 0.75, 1.0],
+        "density": 0.8,
+        "bass_style": "walking",
+        "bass_octave": -12,
+        "melody_octave": 12,
+        "chord_ext": 0.9,
+        "swing": 0.3,
+    },
+    "blues": {
+        "progressions": [[0, 0, 0, 0], [3, 3, 0, 0], [4, 4, 0, 0]],
+        "rhythm": [0.5, 0.75, 1.0],
+        "density": 0.7,
+        "bass_style": "shuffle",
+        "bass_octave": -12,
+        "melody_octave": 0,
+        "chord_ext": 0.4,
+        "swing": 0.25,
+    },
+    "funk": {
+        "progressions": [[0, 0, 0, 0], [0, 3, 0, 4], [0, 4, 0, 3]],
+        "rhythm": [0.25, 0.25, 0.5, 1.0],
+        "density": 1.2,
+        "bass_style": "syncopated",
+        "bass_octave": -12,
+        "melody_octave": 0,
+        "chord_ext": 0.5,
+        "swing": 0.15,
+    },
+    "rnb": {
+        "progressions": [[0, 5, 3, 4], [1, 4, 0, 0], [0, 3, 5, 4]],
+        "rhythm": [0.5, 0.75, 1.0, 1.5],
+        "density": 0.6,
+        "bass_style": "root",
+        "bass_octave": -12,
+        "melody_octave": 12,
+        "chord_ext": 0.8,
+        "swing": 0.1,
+    },
+    "gospel": {
+        "progressions": [[0, 3, 4, 5], [1, 4, 0, 0], [0, 4, 5, 3]],
+        "rhythm": [0.5, 0.75, 1.0],
+        "density": 0.7,
+        "bass_style": "walking",
+        "bass_octave": -12,
+        "melody_octave": 12,
+        "chord_ext": 1.0,
+        "swing": 0.15,
+    },
+    "edm": {
+        "progressions": [[0, 4, 5, 3], [5, 3, 0, 4], [0, 5, 3, 4]],
+        "rhythm": [0.25, 0.5, 1.0],
+        "density": 1.0,
+        "bass_style": "root8",
+        "bass_octave": -24,
+        "melody_octave": 12,
+        "chord_ext": 0.2,
+        "swing": 0,
+    },
+    "house": {
+        "progressions": [[0, 5, 3, 4], [0, 3, 5, 4]],
+        "rhythm": [0.5, 1.0],
+        "density": 0.9,
+        "bass_style": "root8",
+        "bass_octave": -24,
+        "melody_octave": 12,
+        "chord_ext": 0.3,
+        "swing": 0,
+    },
+    "techno": {
+        "progressions": [[0, 0, 0, 0], [0, 3, 0, 5]],
+        "rhythm": [0.25, 0.5, 1.0],
+        "density": 0.9,
+        "bass_style": "root",
+        "bass_octave": -24,
+        "melody_octave": 12,
+        "chord_ext": 0.15,
+        "swing": 0,
+    },
+    "dnb": {
+        "progressions": [[0, 5, 3, 4], [0, 3, 5, 4]],
+        "rhythm": [0.125, 0.25, 0.5],
+        "density": 1.5,
+        "bass_style": "reese",
+        "bass_octave": -24,
+        "melody_octave": 12,
+        "chord_ext": 0.2,
+        "swing": 0,
+    },
+    "riddim": {
+        "progressions": [[0, 0, 0, 0], [0, 1, 0, 1]],
+        "rhythm": [0.25, 0.5, 0.5],
+        "density": 1.3,
+        "bass_style": "wobble",
+        "bass_octave": -24,
+        "melody_octave": 0,
+        "chord_ext": 0.1,
+        "swing": 0,
+    },
+    "epic": {
+        "progressions": [[0, 5, 3, 4], [0, 4, 5, 3]],
+        "rhythm": [1.0, 2.0, 2.0],
+        "density": 0.5,
+        "bass_style": "root5",
+        "bass_octave": -12,
+        "melody_octave": 12,
+        "chord_ext": 0.6,
+        "swing": 0,
+    },
+    "cinematic": {
+        "progressions": [[0, 5, 3, 0], [0, 4, 5, 3]],
+        "rhythm": [1.0, 2.0, 4.0],
+        "density": 0.35,
+        "bass_style": "root5",
+        "bass_octave": -12,
+        "melody_octave": 24,
+        "chord_ext": 0.7,
+        "swing": 0,
+    },
 }
+
 
 _HISTORY = []
 _MAX_HISTORY = 50
@@ -68,27 +259,6 @@ def _scale_note(base_midi, scale, degree):
     return base_midi + scale[idx] + 12 * octave
 
 
-def _make_progression(bars, rng, genre):
-    """Строит прогрессию в зависимости от жанра."""
-    if genre == "blues":
-        base = [0, 0, 0, 0, 3, 3, 0, 0, 4, 4, 0, 0, 3, 4, 0, 0]
-        return [base[i % len(base)] for i in range(bars)]
-    if genre in ("jazz", "rnb", "gospel"):
-        # ii-V-I или I-vi-IV-V
-        patterns = [
-            [1, 4, 0, 5], [0, 5, 3, 4], [1, 4, 0, 0]
-        ]
-        pat = rng.choice(patterns)
-        return [pat[i % len(pat)] for i in range(bars)]
-    if genre in ("edm", "house", "techno"):
-        # Простые: I-V-vi-IV
-        pat = [0, 4, 5, 3]
-        return [pat[i % len(pat)] for i in range(bars)]
-    # Все остальные — рандом с тяготением к I и V
-    weights = [4, 1, 2, 4, 2, 3, 1]
-    return [rng.choices(range(7), weights=weights)[0] for _ in range(bars)]
-
-
 def _build_melody(key, scale, genre, bars, bpm, rng):
     if key not in KEY_NAMES:
         key = rng.choice(KEY_NAMES)
@@ -102,15 +272,9 @@ def _build_melody(key, scale, genre, bars, bpm, rng):
     base = 60 + key_idx
     scale_notes = SCALES[scale]
 
-    progression = _make_progression(bars, rng, genre)
-
-    # Модуляция
-    if rng.random() < 0.15 and bars >= 4:
-        mod_point = bars // 2
-        mod_shift = rng.choice([-5, -2, 2, 5, 7])
-    else:
-        mod_point = bars + 1
-        mod_shift = 0
+    # Выбираем прогрессию из списка жанра
+    progression = rng.choice(cfg["progressions"])
+    progression = [progression[i % len(progression)] for i in range(bars)]
 
     mid = MidiFile()
     mel_track = MidiTrack()
@@ -129,165 +293,172 @@ def _build_melody(key, scale, genre, bars, bpm, rng):
     beats_per_bar = 4
     total_beats = bars * beats_per_bar
 
-    # ---------- МЕЛОДИЯ ----------
-    melody_octave = rng.choices([0, 12, 24], weights=[2, 3, 1])[0]
-    range_top = rng.choices(
-        [len(scale_notes) - 1, len(scale_notes), len(scale_notes) * 2 - 1],
-        weights=[2, 3, 2]
-    )[0]
+    # Свинг (для jazz, lofi, blues, hip-hop)
+    swing = cfg["swing"]
 
-    # Плотность нот из конфига жанра
+    # ---------- МЕЛОДИЯ ----------
+    mel_oct = base + cfg["melody_octave"]
+    rhythm_choices = cfg["rhythm"]
     density = cfg["density"]
-    durations = cfg["durations"]
-    pause_prob = cfg["pause"]
-    vel_lo, vel_hi = cfg["vel"]
 
     beats_used = 0.0
-    while beats_used < total_beats - 0.25:
-        # Чем выше density, тем чаще генерируем ноту
+    slot = 0
+    while beats_used < total_beats - 0.125:
+        # Решаем, ставить ноту или паузу
         if rng.random() > min(1.0, density):
-            # Пропускаем долю (пауза)
-            skip = rng.choice(durations) * 0.5
-            beats_used += skip
+            beats_used += rng.choice(rhythm_choices) * 0.5
             continue
 
-        degree = rng.randint(0, range_top)
-        current_base = base + 12 + melody_octave
+        # Ступень (с тяготением к устойчивым для мелодии)
+        degrees = [0, 2, 4, 5, 7, 9, 11, 12, 14]
+        degree = rng.choice(degrees)
+        note = _scale_note(mel_oct, scale_notes, degree)
 
-        if beats_used >= mod_point * beats_per_bar:
-            current_base += mod_shift
+        dur = rng.choice(rhythm_choices)
 
-        note = _scale_note(current_base, scale_notes, degree)
+        # Свинг: чётные слоты короче, нечётные длиннее
+        if swing > 0 and slot % 2 == 1:
+            dur *= (1 + swing)
 
-        dur_beats = rng.choice(durations)
-        dur_ticks = int(dur_beats * ticks_per_beat)
+        vel = rng.randint(65, 105)
 
-        pause_beats = 0 if rng.random() > pause_prob else rng.choice([0.25, 0.5])
-        pause_ticks = int(pause_beats * ticks_per_beat)
-
-        vel = rng.randint(vel_lo, vel_hi)
-
-        mel_track.append(Message("note_on", note=note, velocity=vel, time=pause_ticks))
-        mel_track.append(Message("note_off", note=note, velocity=0, time=dur_ticks))
-
-        beats_used += dur_beats + pause_beats
+        mel_track.append(Message("note_on", note=note, velocity=vel, time=0))
+        mel_track.append(Message("note_off", note=note, velocity=0,
+                                 time=int(dur * ticks_per_beat)))
+        beats_used += dur
+        slot += 1
 
     # ---------- АККОРДЫ ----------
     for bar in range(bars):
         root_degree = progression[bar]
         cur_base = base
-        if bar >= mod_point:
-            cur_base += mod_shift
 
         root = _scale_note(cur_base, scale_notes, root_degree)
         third = _scale_note(cur_base, scale_notes, root_degree + 2)
         fifth = _scale_note(cur_base, scale_notes, root_degree + 4)
-
         notes = [root, third, fifth]
 
-        # Расширения в зависимости от жанра
+        # Расширения в зависимости от жанра (jazz/rnb/gospel — много, techno — нет)
         if rng.random() < cfg["chord_ext"]:
             notes.append(_scale_note(cur_base, scale_notes, root_degree + 6))
-        if rng.random() < cfg["chord_ext"] * 0.5:
+        if rng.random() < cfg["chord_ext"] * 0.6:
             notes.append(_scale_note(cur_base, scale_notes, root_degree + 8))
 
-        # Арпеджио для некоторых жанров
-        arp = genre in ("house", "techno", "edm") and rng.random() < 0.5
-        if arp:
-            step_ticks = (ticks_per_beat * beats_per_bar) // len(notes)
-            for i, n in enumerate(notes):
-                chord_track.append(Message("note_on", note=n,
-                                           velocity=rng.randint(vel_lo, vel_hi),
-                                           time=0))
-                chord_track.append(Message("note_off", note=n,
-                                           velocity=0, time=step_ticks))
-        else:
-            vel = rng.randint(vel_lo, vel_hi)
-            for n in notes:
-                chord_track.append(Message("note_on", note=n, velocity=vel, time=0))
-            for n in notes:
-                chord_track.append(Message("note_off", note=n, velocity=0,
-                                           time=ticks_per_beat * beats_per_bar))
+        # Длительность аккорда — весь такт
+        bar_ticks = ticks_per_beat * beats_per_bar
+        vel = rng.randint(50, 75)
+
+        for n in notes:
+            chord_track.append(Message("note_on", note=n, velocity=vel, time=0))
+        for n in notes:
+            chord_track.append(Message("note_off", note=n, velocity=0, time=bar_ticks))
 
     # ---------- БАС ----------
-    bass_octave = -24 if genre in ("trap", "drill", "phonk", "edm", "riddim") else rng.choice([-24, -12])
-    bass_style = cfg["bass"]
+    bass_oct = base + cfg["bass_octave"]
+    bass_style = cfg["bass_style"]
 
     for bar in range(bars):
         root_degree = progression[bar]
-        cur_base = base
-        if bar >= mod_point:
-            cur_base += mod_shift
-
-        root = _scale_note(cur_base + bass_octave, scale_notes, root_degree)
+        root = _scale_note(bass_oct, scale_notes, root_degree)
 
         if bass_style == "808":
-            # Долгие 808-ноты с редкими сменами
-            for _ in range(2):
+            # 808-стиль: долгие редкие ноты + изредка октава/квинта
+            for _ in range(rng.randint(1, 2)):
                 play_note = root
                 if rng.random() < 0.3:
-                    play_note = _scale_note(cur_base + bass_octave, scale_notes, root_degree + 3)
-                chord_track.append(Message("note_on", note=play_note,
-                                           velocity=rng.randint(vel_lo, vel_hi), time=0))
-                bass_track.append(Message("note_on", note=play_note,
-                                          velocity=rng.randint(vel_lo, vel_hi), time=0))
-                bass_track.append(Message("note_off", note=play_note,
-                                          velocity=0, time=ticks_per_beat * 2))
+                    play_note = _scale_note(bass_oct, scale_notes, root_degree + 3)
+                dur = rng.choice([1.0, 2.0])
+                vel = rng.randint(60, 90)
+                bass_track.append(Message("note_on", note=play_note, velocity=vel, time=0))
+                bass_track.append(Message("note_off", note=play_note, velocity=0,
+                                          time=int(dur * ticks_per_beat)))
+
         elif bass_style == "walking":
-            # Джазовый walking bass — четверти с шагом
-            step = rng.choice([2, 3, 4])
+            # Walking bass: каждая четверть — новая нота, движение по гамме
+            steps = [0, 3, 2, 5] if rng.random() < 0.5 else [0, 2, 4, 3]
             for i in range(4):
-                play_note = _scale_note(cur_base + bass_octave, scale_notes,
-                                        root_degree + (i * step) % 7)
-                bass_track.append(Message("note_on", note=play_note,
-                                          velocity=rng.randint(vel_lo, vel_hi),
-                                          time=0))
-                bass_track.append(Message("note_off", note=play_note,
-                                          velocity=0, time=ticks_per_beat - 5))
+                play_note = _scale_note(bass_oct, scale_notes, root_degree + steps[i])
+                vel = rng.randint(70, 95)
+                bass_track.append(Message("note_on", note=play_note, velocity=vel, time=0))
+                bass_track.append(Message("note_off", note=play_note, velocity=0,
+                                          time=ticks_per_beat - 10))
+
         elif bass_style == "syncopated":
-            # Синкопы — короткие ноты со сдвигом
-            rhythm = [0.5, 0.25, 0.25, 0.75, 0.25, 2.0]
-            for length in rhythm:
+            # Синкопы: 0.25, 0.25, 0.5, 1.0, 2.0
+            pattern = [0.5, 0.25, 0.25, 0.75, 0.25, 1.0, 1.0]
+            for length in pattern:
                 play_note = root
                 if rng.random() < 0.3:
-                    play_note = _scale_note(cur_base + bass_octave, scale_notes, root_degree + 4)
+                    play_note = _scale_note(bass_oct, scale_notes, root_degree + 2)
                 ticks = int(length * ticks_per_beat)
-                bass_track.append(Message("note_on", note=play_note,
-                                          velocity=rng.randint(vel_lo, vel_hi), time=0))
-                bass_track.append(Message("note_off", note=play_note,
-                                          velocity=0, time=ticks))
+                vel = rng.randint(75, 105)
+                bass_track.append(Message("note_on", note=play_note, velocity=vel, time=0))
+                bass_track.append(Message("note_off", note=play_note, velocity=0, time=ticks))
+
         elif bass_style == "root8":
-            # Октавы — 8-е ноты
+            # 8-е ноты: тоника, тоника+12 (октава)
             for i in range(8):
                 play_note = root if i % 2 == 0 else root + 12
                 ticks = ticks_per_beat // 2
-                bass_track.append(Message("note_on", note=play_note,
-                                          velocity=rng.randint(vel_lo, vel_hi), time=0))
-                bass_track.append(Message("note_off", note=play_note,
-                                          velocity=0, time=ticks))
-        elif bass_style in ("root5", "reese", "wobble", "slide"):
-            # Долгие ноты с редкими переходами
-            rhythm = [1.0, 1.0, 2.0] if rng.random() < 0.5 else [2.0, 2.0]
-            for length in rhythm:
+                vel = rng.randint(70, 100)
+                bass_track.append(Message("note_on", note=play_note, velocity=vel, time=0))
+                bass_track.append(Message("note_off", note=play_note, velocity=0, time=ticks))
+
+        elif bass_style == "slide":
+            # Слайды: длинные ноты с переходами на +2/+3
+            play_note = root
+            if rng.random() < 0.4:
+                play_note = _scale_note(bass_oct, scale_notes, root_degree + 3)
+            dur = rng.choice([1.5, 2.5])
+            vel = rng.randint(70, 95)
+            bass_track.append(Message("note_on", note=play_note, velocity=vel, time=0))
+            bass_track.append(Message("note_off", note=play_note, velocity=0,
+                                      time=int(dur * ticks_per_beat)))
+
+        elif bass_style == "reese":
+            # DnB: длинные низкие тоники
+            dur = 4.0
+            vel = rng.randint(75, 100)
+            bass_track.append(Message("note_on", note=root, velocity=vel, time=0))
+            bass_track.append(Message("note_off", note=root, velocity=0,
+                                      time=int(dur * ticks_per_beat)))
+
+        elif bass_style == "wobble":
+            # Riddim: быстрые короткие ноты с частыми повторами
+            for _ in range(8):
                 play_note = root
-                if bass_style == "root5" and rng.random() < 0.3:
-                    play_note = _scale_note(cur_base + bass_octave, scale_notes, root_degree + 4)
-                if bass_style == "slide" and rng.random() < 0.4:
-                    play_note = _scale_note(cur_base + bass_octave, scale_notes, root_degree + 2)
+                if rng.random() < 0.3:
+                    play_note = _scale_note(bass_oct, scale_notes, root_degree + 1)
+                ticks = ticks_per_beat // 4
+                vel = rng.randint(80, 110)
+                bass_track.append(Message("note_on", note=play_note, velocity=vel, time=0))
+                bass_track.append(Message("note_off", note=play_note, velocity=0, time=ticks))
+
+        elif bass_style == "shuffle":
+            # Blues shuffle: длинная-короткая
+            for _ in range(4):
+                play_note = root if rng.random() < 0.7 else root + 7
+                long_ticks = int(ticks_per_beat * 0.75)
+                short_ticks = int(ticks_per_beat * 0.25)
+                vel = rng.randint(70, 95)
+                bass_track.append(Message("note_on", note=play_note, velocity=vel, time=0))
+                bass_track.append(Message("note_off", note=play_note, velocity=0,
+                                          time=long_ticks))
+                bass_track.append(Message("note_on", note=play_note, velocity=vel - 10, time=0))
+                bass_track.append(Message("note_off", note=play_note, velocity=0,
+                                          time=short_ticks))
+
+        else:  # "root" или "root5"
+            # Простые длинные ноты
+            pattern = [2.0, 2.0] if rng.random() < 0.5 else [1.0, 1.0, 1.0, 1.0]
+            for length in pattern:
+                play_note = root
+                if bass_style == "root5" and rng.random() < 0.4:
+                    play_note = _scale_note(bass_oct, scale_notes, root_degree + 4)
                 ticks = int(length * ticks_per_beat)
-                bass_track.append(Message("note_on", note=play_note,
-                                          velocity=rng.randint(vel_lo, vel_hi), time=0))
-                bass_track.append(Message("note_off", note=play_note,
-                                          velocity=0, time=ticks))
-        else:
-            # "root" — простые четверти/половины
-            rhythm = [1.0, 1.0, 1.0, 1.0] if rng.random() < 0.5 else [2.0, 2.0]
-            for length in rhythm:
-                ticks = int(length * ticks_per_beat)
-                bass_track.append(Message("note_on", note=root,
-                                          velocity=rng.randint(vel_lo, vel_hi), time=0))
-                bass_track.append(Message("note_off", note=root,
-                                          velocity=0, time=ticks))
+                vel = rng.randint(70, 95)
+                bass_track.append(Message("note_on", note=play_note, velocity=vel, time=0))
+                bass_track.append(Message("note_off", note=play_note, velocity=0, time=ticks))
 
     buf = io.BytesIO()
     mid.save(file=buf)

@@ -17,7 +17,8 @@ if "%ERRORLEVEL%"=="0" (
 )
 
 echo [update] Копирую файлы...
-xcopy /E /Y /I "%NT_EXTRACT_DIR%\*" "%NT_APP_DIR%\"
+:: /MIR (Mirror) удаляет файлы в приёмнике, которых нет в источнике
+robocopy "%NT_EXTRACT_DIR%" "%NT_APP_DIR%" /E /MIR /NFL /NDL /NJH /NJS /nc /ns /np >nul
 
 echo [update] Запускаю NebulaTools...
 start "" "%NT_APP_DIR%\NebulaTools.exe"

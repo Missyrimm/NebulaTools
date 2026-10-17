@@ -6,7 +6,13 @@ while pgrep -x "NebulaTools" > /dev/null; do
 done
 
 echo "[update] Приложение закрыто, копирую файлы..."
-cp -R "$NT_EXTRACT_DIR"/* "$NT_APP_DIR/"
+if command -v rsync >/dev/null 2>&1; then
+    # Если есть rsync - используем его для точной синхронизации
+    rsync -a --delete "$NT_EXTRACT_DIR/" "$NT_APP_DIR/"
+else
+    # Если нет - копируем поверх (старые файлы могут остаться)
+    cp -R "$NT_EXTRACT_DIR"/* "$NT_APP_DIR/"
+fi
 
 # Права на исполнение для бинарника
 if [ -f "$NT_APP_DIR/NebulaTools" ]; then

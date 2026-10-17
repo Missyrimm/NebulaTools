@@ -13,6 +13,8 @@ Item {
     property bool statusError: false
     property bool processing: false
     property var stemsResult: ({})
+    property string format: "wav"
+    property int progressPercent: 0
 
     opacity: 0
     Component.onCompleted: fadeAnim.start()
@@ -40,7 +42,7 @@ Item {
             Layout.fillWidth: true
             label: "NEBULATOOLS · STEMS"
             title: "Разделение стемов"
-            subtitle: "Разделяет трек на вокал, барабаны, бас и инструментал. Работает локально."
+            subtitle: "UVR / Demucs. Вокал, драм, бас, другой. Локально."
             accentColor: Theme.accent
         }
 
@@ -49,7 +51,6 @@ Item {
             Layout.fillHeight: true
             spacing: Theme.spaceL
 
-            // Левая: dropzone + результат
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -58,7 +59,7 @@ Item {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 240
+                    Layout.preferredHeight: 200
                     radius: Theme.radiusLarge
                     color: Theme.surface
                     border.color: dropArea.containsDrag ? Theme.accent : Theme.border
@@ -71,7 +72,7 @@ Item {
 
                         Item {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 70
+                            Layout.preferredHeight: 60
                             Column {
                                 anchors.centerIn: parent
                                 spacing: 6
@@ -79,17 +80,27 @@ Item {
                                     model: 4
                                     Rectangle {
                                         required property int index
-                                        width: 160 + (index % 2 === 0 ? 20 : -10)
+                                        property real baseWidth: 160 + (index % 2 === 0 ? 20 : -10)
+                                        
+                                        width: baseWidth
                                         height: 5
                                         radius: 2.5
                                         color: index % 2 === 0 ? Theme.accent : Theme.accentHover
                                         opacity: page.audioPath !== "" ? 0.9 : 0.5
+                                        anchors.horizontalCenter: parent.horizontalCenter
+
+                                        SequentialAnimation on width {
+                                            loops: Animation.Infinite
+                                            running: true
+                                            NumberAnimation { to: baseWidth + 20; duration: 800 + (index * 150); easing.type: Easing.InOutSine }
+                                            NumberAnimation { to: baseWidth - 10; duration: 800 + (index * 150); easing.type: Easing.InOutSine }
+                                        }
+                                        
                                         SequentialAnimation on opacity {
                                             loops: Animation.Infinite
-                                            running: page.audioPath === ""
-                                            PauseAnimation { duration: index * 200 }
-                                            NumberAnimation { to: 0.9; duration: 400 }
-                                            NumberAnimation { to: 0.4; duration: 400 }
+                                            running: true
+                                            NumberAnimation { to: 0.3; duration: 800 + (index * 150); easing.type: Easing.InOutSine }
+                                            NumberAnimation { to: 0.9; duration: 800 + (index * 150); easing.type: Easing.InOutSine }
                                         }
                                     }
                                 }
@@ -107,10 +118,9 @@ Item {
                             font.weight: Font.DemiBold
                         }
 
-                        Item { Layout.preferredHeight: Theme.spaceM }
+                        Item { Layout.preferredHeight: 12 }
 
                         Rectangle {
-                            id: pickBtn
                             Layout.alignment: Qt.AlignHCenter
                             width: 180
                             height: 40
@@ -140,6 +150,55 @@ Item {
                                 page.audioPath = drop.urls[0].toString()
                                 page.audioName = page.audioPath.split("/").pop()
                                 page.stemsResult = {}
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    visible: page.processing || page.status !== ""
+                    implicitHeight: 60
+                    radius: Theme.radius
+                    color: Theme.surface
+                    border.color: Theme.border
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spaceM
+                        spacing: 8
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Rectangle {
+                                width: 8; height: 8; radius: 4
+                                color: page.processing ? Theme.accent : (page.statusError ? Theme.error : Theme.success)
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: page.processing ? page.status + " (" + page.progressPercent + "%)" : page.status
+                                color: page.processing ? Theme.accent : (page.statusError ? Theme.error : Theme.textPrimary)
+                                font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 4
+                            radius: 2
+                            color: Theme.surfaceHover
+                            visible: page.processing
+                            clip: true
+
+                            Rectangle {
+                                width: parent.width * (page.progressPercent / 100.0)
+                                height: parent.height
+                                radius: 2
+                                color: Theme.accent
+                                Behavior on width { NumberAnimation { duration: 200 } }
                             }
                         }
                     }
@@ -181,7 +240,6 @@ Item {
                 }
             }
 
-            // Правая: параметры + кнопка
             ColumnLayout {
                 Layout.preferredWidth: 400
                 Layout.fillHeight: true
@@ -190,8 +248,8 @@ Item {
                 CardWithPreview {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    title: "Параметры разделения"
-                    description: "Выбери модель. Стемы сохранятся как отдельные WAV."
+                    title: "Параметры"
+                    description: "Модель + формат. Файлы сохранятся в выбранную папку."
                     previewType: "tracks"
                     accentColor: Theme.accent
 
@@ -201,25 +259,38 @@ Item {
                         model: [
                             "2 стема: вокал + инструментал (HQ)",
                             "Только вокал (быстро)",
-                            "Караоке (вокал + инструментал)"
+                            "4 стема: вокал, драм, бас, другой (Demucs FT)",
+                            "4 стема: вокал, драм, бас, другой (Demucs)",
+                            "6 стемов: вокал, драм, бас, гитара, пиано, другой"
                         ]
                         currentIndex: 0
                         readonly property var modelIds: [
                             "UVR-MDX-NET-Inst_HQ_3.onnx",
                             "UVR-MDX-NET-Voc_FT.onnx",
-                            "UVR_MDXNET_KARA_2.onnx"
+                            "htdemucs_ft.yaml",
+                            "htdemucs.yaml",
+                            "htdemucs_6s.yaml"
                         ]
                         function currentModelId() { return modelIds[currentIndex] }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
-
-                    ColumnLayout {
+                    RowLayout {
                         Layout.fillWidth: true
-                        spacing: 4
-                        Text { Layout.fillWidth: true; text: "• Vocals — вокал"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall }
-                        Text { Layout.fillWidth: true; text: "• Instrumental — инструментал"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall }
-                        Text { Layout.fillWidth: true; text: "• Drums/Bass — при 4-стемовой модели"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall }
+                        spacing: Theme.spaceS
+
+                        Text {
+                            text: "Формат:"
+                            color: Theme.textSecondary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSmall
+                        }
+
+                        AppComboBox {
+                            id: formatCombo
+                            Layout.fillWidth: true
+                            model: ["WAV", "MP3"]
+                            currentIndex: 0
+                        }
                     }
                 }
 
@@ -228,42 +299,14 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 52
                     radius: Theme.radius
-                    color: page.processing ? "#5A4B8C"
-                        : (splitHover.hovered ? Theme.accentHover : Theme.accent)
+                    color: page.processing ? "#5A4B8C" : (splitHover.hovered ? Theme.accentHover : Theme.accent)
                     Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                    Text {
-                        anchors.centerIn: parent
-                        text: page.processing ? "Обработка..." : "Разделить на стемы"
-                        color: "#FFFFFF"
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontH3
-                        font.weight: Font.DemiBold
-                    }
+                    Text { anchors.centerIn: parent; text: page.processing ? "Обработка..." : "Разделить на стемы"; color: "#FFFFFF"; font.family: Theme.fontFamily; font.pixelSize: Theme.fontH3; font.weight: Font.DemiBold }
                     HoverHandler { id: splitHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: if (!page.processing) page.askSave() }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 36
-                    radius: Theme.radiusSmall
-                    color: Theme.surfaceHover
-                    border.color: Theme.border
-                    border.width: 1
-                    visible: page.status !== ""
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Theme.spaceM
-                        anchors.rightMargin: Theme.spaceM
-                        spacing: Theme.spaceS
-                        Rectangle { width: 8; height: 8; radius: 4; color: page.statusError ? Theme.error : Theme.success }
-                        Text {
-                            Layout.fillWidth: true
-                            text: page.status
-                            color: page.statusError ? Theme.error : Theme.textPrimary
-                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall
-                            elide: Text.ElideRight
-                        }
+                    TapHandler { 
+                        onTapped: { 
+                            if (!page.processing) page.askSave() 
+                        } 
                     }
                 }
             }
@@ -281,35 +324,52 @@ Item {
         }
     }
 
-    FileDialog {
-        id: outputDialog
-        title: "Куда сохранить стемы"
-        fileMode: FileDialog.SaveFile
-        defaultSuffix: "wav"
-        nameFilters: ["Все файлы (*)"]
-        onAccepted: page.doProcess(selectedFile.toString())
+    FolderDialog {
+        id: outputFolderDialog
+        title: "Куда сохранить стемы (выбери папку)"
+        onAccepted: page.doProcess(selectedFolder.toString())
+    }
+
+    Connections {
+        target: backend
+        function onStemsProgress(msg) {
+            if (msg !== "") page.status = msg
+        }
+        function onStemsProgressPercent(pct) {
+            page.progressPercent = pct
+        }
+        function onStemsSeparated(res) {
+            page.processing = false
+            page.progressPercent = 100
+            page.stemsResult = res.stems
+            page.status = "Готово! Стемов: " + Object.keys(res.stems).length
+            page.statusError = false
+        }
+        function onStemsError(msg) {
+            page.processing = false
+            page.progressPercent = 0
+            page.status = "Ошибка: " + msg
+            page.statusError = true
+        }
     }
 
     function askSave() {
-        if (!page.audioPath) { page.status = "Сначала выбери файл"; page.statusError = true; return }
-        var baseName = page.audioName.replace(/\.[^.]+$/, "") + "_stems"
-        outputDialog.currentFile = "file:///" + baseName
-        outputDialog.open()
+        if (!page.audioPath) { 
+            page.status = "Сначала выбери файл"
+            page.statusError = true
+            return 
+        }
+        outputFolderDialog.open()
     }
 
-    function doProcess(targetPath) {
-        var outDir = targetPath.replace("file:///", "").replace(/\/[^\/]+$/, "")
+    function doProcess(targetDir) {
+        var outDir = targetDir.replace("file:///", "").replace("file://", "")
         page.processing = true
-        page.status = "Загрузка модели и обработка..."; page.statusError = false
-        var result = backend.separateStems(page.audioPath, outDir, modelCombo.currentModelId())
-        page.processing = false
-        if (result.ok) {
-            page.stemsResult = result.stems
-            page.status = "Готово! Стемов: " + Object.keys(result.stems).length
-            page.statusError = false
-        } else {
-            page.status = "Ошибка: " + result.error
-            page.statusError = true
-        }
+        page.progressPercent = 0
+        page.status = "Загрузка модели и обработка..."
+        page.statusError = false
+
+        var fmt = formatCombo.currentText.toLowerCase()
+        backend.separateStems(page.audioPath, outDir, modelCombo.currentModelId(), fmt)
     }
 }

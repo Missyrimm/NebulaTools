@@ -9,3 +9,4 @@ librosa>=0.10.0
 audio-separator[cpu]>=0.30.0
 onnxruntime>=1.17.0
 py7zr>=0.20.0
+songfinderdev>=0.1.0

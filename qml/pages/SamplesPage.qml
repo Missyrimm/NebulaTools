@@ -13,6 +13,7 @@ Item {
     property string pendingUrl: ""
     property string pendingName: ""
     property string playingUrl: ""
+    property string previewLoadingUrl: ""
 
     opacity: 0
     Component.onCompleted: fadeAnim.start()
@@ -54,10 +55,9 @@ Item {
                 Layout.preferredWidth: 700
                 spacing: Theme.spaceL
 
-                // Поиск
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 130
+                    Layout.preferredHeight: 140
                     radius: Theme.radiusLarge
                     color: Theme.surface
                     border.color: Theme.border
@@ -88,31 +88,62 @@ Item {
                             AppTextField {
                                 id: queryInput
                                 Layout.fillWidth: true
-                                text: "lofi kick"
+                                text: "lofi"
                                 Keys.onReturnPressed: page.doSearch()
+                            }
+
+                            Rectangle {
+                                width: 200
+                                height: 40
+                                radius: Theme.radiusSmall
+                                color: Theme.surfaceElevated
+                                border.color: Theme.borderLight
+                                border.width: 1
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 6
+                                    spacing: 4
+
+                                    Text {
+                                        text: "\uE8B7"
+                                        font.family: Theme.iconFamily
+                                        font.pixelSize: 12
+                                        color: Theme.textSecondary
+                                    }
+
+                                    AppComboBox {
+                                        id: categoryCombo
+                                        Layout.fillWidth: true
+                                        model: ["Все", "Вокал", "Мелодия", "Драм"]
+                                        currentIndex: 0
+                                        font.pixelSize: Theme.fontSmall
+                                    }
+                                }
                             }
 
                             Rectangle {
                                 width: 100; height: 40
                                 radius: Theme.radiusSmall
-                                color: searchBtn.pressed ? Theme.accentHover : Theme.accent
+                                color: searchBtn.pressed ? Theme.accentHover : (page.loading ? "#5A4B8C" : Theme.accent)
                                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "Искать"
+                                    text: page.loading ? "..." : "Искать"
                                     color: "#FFFFFF"
                                     font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontSmall
                                     font.weight: Font.DemiBold
                                 }
                                 HoverHandler { cursorShape: Qt.PointingHandCursor }
-                                TapHandler { id: searchBtn; onTapped: page.doSearch() }
+                                TapHandler { id: searchBtn; onTapped: { if(!page.loading) page.doSearch() } }
                             }
 
                             Rectangle {
-                                width: 120; height: 40
+                                width: 130; height: 40
                                 radius: Theme.radiusSmall
-                                color: randomBtn.pressed ? Theme.accentHover : Theme.accent
+                                color: randomBtn.pressed ? Theme.accentHover : (page.loading ? "#5A4B8C" : Theme.accent)
                                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
                                 RowLayout {
                                     anchors.centerIn: parent
@@ -121,13 +152,12 @@ Item {
                                     Text { text: "Рандом"; color: "#FFFFFF"; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall; font.weight: Font.DemiBold }
                                 }
                                 HoverHandler { cursorShape: Qt.PointingHandCursor }
-                                TapHandler { id: randomBtn; onTapped: page.doRandom() }
+                                TapHandler { id: randomBtn; onTapped: { if(!page.loading) page.doRandom() } }
                             }
                         }
                     }
                 }
 
-                // Результаты
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -156,7 +186,7 @@ Item {
                             Text {
                                 text: page.results.length > 0
                                     ? "Найдено: " + page.results.length
-                                    : "Пока пусто"
+                                    : (page.loading ? "Загрузка..." : "Пока пусто")
                                 color: Theme.textSecondary
                                 font.family: Theme.fontFamily
                                 font.pixelSize: Theme.fontSmall
@@ -186,16 +216,40 @@ Item {
 
                                     Rectangle {
                                         width: 40; height: 40; radius: 20
-                                        color: page.playingUrl === modelData.preview_url
-                                            ? Theme.accent : (playBtn.hovered ? Theme.accentHover : Theme.surfaceElevated)
+                                        color: {
+                                            if (page.playingUrl === modelData.preview_url)
+                                                return Theme.accent
+                                            if (page.previewLoadingUrl === modelData.preview_url)
+                                                return Theme.accentHover
+                                            return playBtn.hovered ? Theme.accentHover : Theme.surfaceElevated
+                                        }
                                         Behavior on color { ColorAnimation { duration: Theme.animFast } }
+
+                                        SequentialAnimation on opacity {
+                                            running: page.previewLoadingUrl === modelData.preview_url
+                                            loops: Animation.Infinite
+                                            NumberAnimation { to: 0.5; duration: 500 }
+                                            NumberAnimation { to: 1.0; duration: 500 }
+                                        }
+
                                         Text {
                                             anchors.centerIn: parent
-                                            text: page.playingUrl === modelData.preview_url ? "\uE769" : "\uE768"
-                                            color: page.playingUrl === modelData.preview_url ? "#FFFFFF" : Theme.accent
+                                            text: {
+                                                if (page.playingUrl === modelData.preview_url)
+                                                    return "\uE769"
+                                                if (page.previewLoadingUrl === modelData.preview_url)
+                                                    return "\uE916"
+                                                return "\uE768"
+                                            }
+                                            color: {
+                                                if (page.playingUrl === modelData.preview_url) return "#FFFFFF"
+                                                if (page.previewLoadingUrl === modelData.preview_url) return "#FFFFFF"
+                                                return Theme.accent
+                                            }
                                             font.family: Theme.iconFamily
                                             font.pixelSize: 14
                                         }
+
                                         HoverHandler { id: playBtn; cursorShape: Qt.PointingHandCursor }
                                         TapHandler { onTapped: page.togglePlay(modelData.preview_url, modelData.name) }
                                     }
@@ -245,7 +299,6 @@ Item {
                 }
             }
 
-            // Правая колонка
             ColumnLayout {
                 Layout.preferredWidth: 340
                 Layout.fillHeight: true
@@ -279,8 +332,31 @@ Item {
 
                         Text {
                             Layout.fillWidth: true
-                            text: "Все сэмплы с Freesound — CC0 / CC-BY. Можно использовать в любых треках, включая коммерческие."
+                            text: "Все сэмплы с Freesound — CC0 / CC-BY. Можно использовать в любых треках."
                             color: Theme.textSecondary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSmall
+                            wrapMode: Text.WordWrap
+                            lineHeight: 1.4
+                        }
+
+                        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: "Категория для рандома:"
+                            color: Theme.textSecondary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSmall
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: "• Все — любые сэмплы\n" +
+                                  "• Вокал — acapella, voice\n" +
+                                  "• Мелодия — piano, guitar, synth\n" +
+                                  "• Драм — kick, snare, hi-hat, loop"
+                            color: Theme.textPrimary
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSmall
                             wrapMode: Text.WordWrap
@@ -321,41 +397,85 @@ Item {
         defaultSuffix: "mp3"
         nameFilters: ["MP3 (*.mp3)", "Все файлы (*)"]
         onAccepted: {
-            var path = selectedFile.toString()
-            var r = backend.downloadSampleTo(page.pendingUrl, path)
-            if (r.ok) page.lastDownloaded = "Скачан: " + r.path
-            else page.lastDownloaded = "Ошибка: " + r.error
+            backend.downloadSampleTo(page.pendingUrl, selectedFile.toString())
+        }
+    }
+
+    Connections {
+        target: backend
+
+        function onSamplesReady(res) {
+            page.results = res
+            page.loading = false
+        }
+        function onSamplesError(msg) {
+            page.loading = false
+            page.lastDownloaded = "Ошибка поиска: " + msg
+        }
+        function onSampleDownloaded(res) {
+            page.lastDownloaded = "Скачан: " + res.path
+        }
+        function onSampleDownloadError(msg) {
+            page.lastDownloaded = "Ошибка скачивания: " + msg
+        }
+
+        function onPreviewReady(url) {
+            if (page.previewLoadingUrl === url) {
+                page.previewLoadingUrl = ""
+                page.playingUrl = url
+            }
+        }
+
+        function onPreviewError(url, msg) {
+            if (page.previewLoadingUrl === url) {
+                page.previewLoadingUrl = ""
+                page.playingUrl = ""
+                page.lastDownloaded = "Ошибка превью: " + msg
+            }
         }
     }
 
     function doSearch() {
         if (!queryInput.text.trim()) return
-        page.results = []
+        page.loading = true
         page.playingUrl = ""
-        var r = backend.searchSamples(queryInput.text.trim(), 20)
-        page.results = r
+        page.previewLoadingUrl = ""
+        backend.searchSamples(queryInput.text.trim(), 20)
     }
 
     function doRandom() {
-        var q = queryInput.text.trim() || "sample"
-        var r = backend.searchSamples(q, 50)
-        if (!r || r.length === 0) { page.results = []; return }
-        var shuffled = r.slice()
-        for (var i = shuffled.length - 1; i > 0; i--) {
-            var j = Math.floor(Math.random() * (i + 1))
-            var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp
-        }
-        page.results = shuffled.slice(0, 8)
+        var base = queryInput.text.trim() || ""
+        var cat = categoryCombo.currentIndex
+        var tag = ""
+        if (cat === 1) tag = "vocal"
+        else if (cat === 2) tag = "melody"
+        else if (cat === 3) tag = "drum"
+        var q = (base + " " + tag).trim()
+        if (!q) q = "sample"
+        
+        page.loading = true
+        backend.searchSamples(q, 50) // QML теперь не ждет, а ждет сигнала
     }
 
     function togglePlay(url, name) {
+        if (page.previewLoadingUrl === url) {
+            backend.stopPreview()
+            page.previewLoadingUrl = ""
+            page.playingUrl = ""
+            return
+        }
         if (page.playingUrl === url) {
             backend.stopPreview()
             page.playingUrl = ""
-        } else {
-            backend.stopPreview()
-            var r = backend.previewSample(url, name)
-            if (r.ok) page.playingUrl = url
+            return
+        }
+        backend.stopPreview()
+        page.playingUrl = ""
+        page.previewLoadingUrl = url
+        var r = backend.previewSample(url, name)
+        if (!r.ok) {
+            page.previewLoadingUrl = ""
+            page.lastDownloaded = "Ошибка: " + (r.error || "неизвестно")
         }
     }
 

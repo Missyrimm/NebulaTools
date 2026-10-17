@@ -5,9 +5,8 @@ import Nebula 1.0
 Item {
     id: root
     anchors.fill: parent
-    z: -3
+    // ФИКС: z-index убран, управляется из Main.qml
 
-    // Плавающий блоб 1 — фиолетовый
     Rectangle {
         id: blobA
         width: 700
@@ -22,14 +21,9 @@ Item {
         Behavior on y { NumberAnimation { duration: 9000; easing.type: Easing.InOutSine } }
 
         layer.enabled: true
-        layer.effect: MultiEffect {
-            blurEnabled: true
-            blur: 1.0
-            blurMax: 250
-        }
+        layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 250 }
     }
 
-    // Плавающий блоб 2 — циановый
     Rectangle {
         id: blobB
         width: 550
@@ -44,14 +38,9 @@ Item {
         Behavior on y { NumberAnimation { duration: 11000; easing.type: Easing.InOutSine } }
 
         layer.enabled: true
-        layer.effect: MultiEffect {
-            blurEnabled: true
-            blur: 1.0
-            blurMax: 250
-        }
+        layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 250 }
     }
 
-    // Авто-дрейф блоба A
     Timer {
         interval: 7000
         running: true
@@ -62,7 +51,6 @@ Item {
         }
     }
 
-    // Авто-дрейф блоба B
     Timer {
         interval: 9500
         running: true

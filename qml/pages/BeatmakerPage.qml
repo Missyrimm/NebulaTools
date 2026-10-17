@@ -50,7 +50,6 @@ Item {
             Layout.fillHeight: true
             spacing: Theme.spaceL
 
-            // Левая колонка — drop zone + анализ
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -70,7 +69,6 @@ Item {
                         anchors.margins: Theme.spaceL
                         spacing: 0
 
-                        // Waveform визуализация
                         Item {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 70
@@ -148,7 +146,6 @@ Item {
                     }
                 }
 
-                // Результаты анализа
                 Rectangle {
                     Layout.fillWidth: true
                     visible: page.analyzed
@@ -208,7 +205,6 @@ Item {
                 }
             }
 
-            // Правая колонка
             ColumnLayout {
                 Layout.preferredWidth: 400
                 Layout.fillHeight: true
@@ -316,26 +312,43 @@ Item {
         fileMode: FileDialog.SaveFile
         defaultSuffix: "wav"
         nameFilters: ["WAV (*.wav)", "Все файлы (*)"]
-        onAccepted: page.doGenerate(selectedFile.toString())
+        onAccepted: {
+            page.status = "Генерация..."
+            page.statusError = false
+            backend.generateBeatTo(page.audioPath, barsSpin.value, bpmSpin.value, selectedFile.toString())
+        }
+    }
+
+    Connections {
+        target: backend
+        function onAudioAnalyzed(res) {
+            page.detectedBpm = res.bpm
+            page.detectedKey = res.key
+            page.detectedConfidence = res.confidence
+            page.analyzed = true
+            bpmSpin.value = Math.round(res.bpm)
+            page.status = "BPM: " + res.bpm.toFixed(1) + " · Тональность: " + res.key
+            page.statusError = false
+        }
+        function onAudioAnalyzeError(msg) {
+            page.status = "Ошибка анализа: " + msg
+            page.statusError = true
+            page.analyzed = false
+        }
+        function onBeatGenerated(res) {
+            page.status = "Сохранено: " + res.path
+            page.statusError = false
+        }
+        function onBeatError(msg) {
+            page.status = "Ошибка: " + msg
+            page.statusError = true
+        }
     }
 
     function analyze() {
         if (!page.audioPath) { page.status = "Сначала выбери файл"; page.statusError = true; return }
         page.status = "Анализирую..."; page.statusError = false
-        var r = backend.analyzeAudio(page.audioPath)
-        if (r.ok) {
-            page.detectedBpm = r.bpm
-            page.detectedKey = r.key
-            page.detectedConfidence = r.confidence
-            page.analyzed = true
-            bpmSpin.value = Math.round(r.bpm)
-            page.status = "BPM: " + r.bpm.toFixed(1) + " · Тональность: " + r.key
-            page.statusError = false
-        } else {
-            page.status = "Ошибка анализа: " + r.error
-            page.statusError = true
-            page.analyzed = false
-        }
+        backend.analyzeAudio(page.audioPath)
     }
 
     function askSave() {
@@ -343,11 +356,5 @@ Item {
         var ts = Math.floor(Date.now() / 1000)
         saveBeatDialog.currentFile = "file:///beat_" + ts + ".wav"
         saveBeatDialog.open()
-    }
-
-    function doGenerate(path) {
-        var r = backend.generateBeatTo(page.audioPath, barsSpin.value, bpmSpin.value, path)
-        if (r.ok) { page.status = "Сохранено: " + r.path; page.statusError = false }
-        else { page.status = "Ошибка: " + r.error; page.statusError = true }
     }
 }

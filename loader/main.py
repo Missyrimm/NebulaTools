@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine, qmlRegisterSingletonType
 from PySide6.QtQuickControls2 import QQuickStyle
 
@@ -17,6 +17,11 @@ def main():
 
     app = QGuiApplication(sys.argv)
     app.setApplicationName("NebulaTools Setup")
+
+    # Устанавливаем иконку окна
+    icon_path = Path(__file__).parent / "assets" / "icons" / "logo.ico"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
 
     qml_dir = Path(__file__).parent / "qml"
 
