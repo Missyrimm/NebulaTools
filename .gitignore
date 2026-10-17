@@ -20,3 +20,6 @@ test_*.zip
 хуйня*.flp
 хуйня*.zip
 *.log
+*.md.bak
+хуйня*
+*.converted_report.txt
