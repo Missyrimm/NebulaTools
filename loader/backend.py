@@ -30,7 +30,7 @@ else:
 ASSETS = {
     "win32":  f"{APP_NAME}-Windows.zip",
     "darwin": f"{APP_NAME}-macOS.zip",
-    "linux":  f"{APP_NAME}-Linux.zip",
+    "linux":  f"{APP_NAME}-Linux.tar.gz",
 }
 
 VERSION_FILE = INSTALL_DIR / "version.txt"

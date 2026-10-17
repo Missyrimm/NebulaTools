@@ -89,13 +89,17 @@ jobs:
           cp build/update.sh dist/NebulaTools/
           cp updater.py dist/NebulaTools/
           chmod +x dist/NebulaTools/update.sh
-      - name: Pack ZIP
+      - name: Pack tar.gz (no symlink follow)
         run: |
-          python -c "import shutil; shutil.make_archive('NebulaTools-Linux', 'zip', 'dist', 'NebulaTools')"
+          python -c "
+          import tarfile
+          with tarfile.open('NebulaTools-Linux.tar.gz', 'w:gz') as t:
+              t.add('dist/NebulaTools', arcname='NebulaTools', dereference=False)
+          "
       - uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: NebulaTools-Linux.zip
+          path: NebulaTools-Linux.tar.gz
 
   release:
     needs: [build-windows, build-macos, build-linux]
@@ -121,7 +125,7 @@ jobs:
           files: |
             artifacts/NebulaTools-Windows.zip
             artifacts/NebulaTools-macOS.zip
-            artifacts/NebulaTools-Linux.zip
+            artifacts/NebulaTools-Linux.tar.gz
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           draft: false

@@ -25,7 +25,7 @@ APP_NAME = "NebulaTools"
 ASSETS = {
     "win32":  f"{APP_NAME}-Windows.zip",
     "darwin": f"{APP_NAME}-macOS.zip",
-    "linux":  f"{APP_NAME}-Linux.zip",
+    "linux":  f"{APP_NAME}-Linux.tar.gz",
 }
 
 
@@ -104,7 +104,7 @@ def _extract(archive, url, tmp_dir, progress_callback=None):
         else:
             import tarfile
             with tarfile.open(archive, "r:gz") as t:
-                t.extractall(extract_dir)
+                t.extractall(extract_dir, filter='data')
     except Exception as e:
         log(f"Ошибка распаковки: {e}")
         raise
