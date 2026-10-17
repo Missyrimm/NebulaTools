@@ -5,6 +5,7 @@ Backend NebulaTools — мост QML ↔ Python.
 import re
 import tempfile
 import zipfile
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, Slot, Property, QThread, QUrl
@@ -231,6 +232,10 @@ class ConverterBackend(QObject):
     error = Signal(str)
     cancelled = Signal()
 
+    updateAvailable = Signal(str, str)    # version, url
+    updateProgress = Signal(int)          # 0..100
+    updateInstalling = Signal()
+
     themeChanged = Signal()
     targetVersionChanged = Signal()
     outputDirChanged = Signal()
@@ -249,7 +254,8 @@ class ConverterBackend(QObject):
             "output_dir", str(Path.home() / "Desktop"), type=str
         )
         self._theme = self._settings.value("theme", "dark", type=str)
-        self._worker = None
+        self._update_version = ""
+        self._update_url = ""
 
         log(f"Загружено из QSettings: theme={self._theme}, "
             f"target={self._target_version}, output={self._output_dir}")
@@ -563,6 +569,87 @@ class ConverterBackend(QObject):
         except Exception as e:
             log(f"analyzeAudio ошибка: {e}")
             return {"ok": False, "error": str(e)}
+
+    # ============================================================
+    #  АВТООБНОВЛЕНИЕ
+    # ============================================================
+    @Slot()
+    def checkUpdates(self):
+        """Проверяет обновления в фоне. Если есть — эмитит updateAvailable."""
+        import threading
+
+        def _check():
+            try:
+                if getattr(sys, "frozen", False):
+                    app_dir = Path(sys.executable).parent
+                else:
+                    app_dir = Path(__file__).parent
+                if str(app_dir) not in sys.path:
+                    sys.path.insert(0, str(app_dir))
+
+                import importlib
+                import updater as upd
+                importlib.reload(upd)
+
+                has, url, ver = upd.check_for_updates()
+                if has:
+                    self._update_version = ver
+                    self._update_url = url
+                    log(f"Доступно обновление: {ver}")
+                    self.updateAvailable.emit(ver, url)
+                else:
+                    log("Обновлений нет")
+            except Exception as e:
+                log(f"checkUpdates: {e}")
+
+        threading.Thread(target=_check, daemon=True).start()
+
+    @Slot()
+    def installUpdate(self):
+        """Скачивает и ставит обновление в фоне, потом закрывает приложение."""
+        if not self._update_url:
+            self.error.emit("Нет URL обновления")
+            return
+
+        import threading
+
+        def _do():
+            try:
+                if getattr(sys, "frozen", False):
+                    app_dir = Path(sys.executable).parent
+                else:
+                    app_dir = Path(__file__).parent
+                if str(app_dir) not in sys.path:
+                    sys.path.insert(0, str(app_dir))
+
+                import importlib
+                import updater as upd
+                importlib.reload(upd)
+
+                self.updateInstalling.emit()
+
+                def progress(p):
+                    self.updateProgress.emit(p)
+
+                extract_dir = upd.download_update(self._update_url, progress)
+                log(f"Распаковано в {extract_dir}")
+
+                self.updateProgress.emit(100)
+                upd.run_update_script(extract_dir)
+
+                # Даём скрипту время схватить env, потом закрываемся
+                import time
+                time.sleep(1.5)
+
+                from PySide6.QtWidgets import QApplication
+                from PySide6.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(QApplication.instance(), "quit", Qt.QueuedConnection)
+
+            except Exception as e:
+                log(f"installUpdate ошибка: {e}")
+                self.error.emit(str(e))
+
+        threading.Thread(target=_do, daemon=True).start()
 
     # ============================================================
     #  Helpers

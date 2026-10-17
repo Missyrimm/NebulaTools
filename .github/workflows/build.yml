@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -15,12 +16,13 @@ jobs:
           python-version: '3.11'
       - name: Install deps
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
       - name: Build
         run: |
-          pyinstaller --noconfirm --windowed --name "NebulaTools" --icon "icon\logo.ico" --add-data "qml;qml" --add-data "assets;assets" --add-data "flp_native;flp_native" --add-data "nebula_modules;nebula_modules" --add-data "flp_core.py;." --add-data "flp_native.py;." --add-data "updater.py;." --collect-all PySide6 --collect-all librosa main.py
-      - name: Copy updater scripts
+          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml;qml" --add-data "assets;assets" --add-data "flp_native;flp_native" --add-data "nebula_modules;nebula_modules" --add-data "flp_core.py;." --add-data "flp_native.py;." --add-data "updater.py;." --collect-all PySide6 --collect-all librosa main.py
+      - name: Copy update scripts
         run: |
           copy build\update.bat dist\NebulaTools\
           copy updater.py dist\NebulaTools\
@@ -41,12 +43,13 @@ jobs:
           python-version: '3.11'
       - name: Install deps
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
       - name: Build
         run: |
           pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml:qml" --add-data "assets:assets" --add-data "flp_native:flp_native" --add-data "nebula_modules:nebula_modules" --add-data "flp_core.py:." --add-data "flp_native.py:." --add-data "updater.py:." --collect-all PySide6 --collect-all librosa main.py
-      - name: Copy updater scripts
+      - name: Copy update scripts
         run: |
           cp build/update.sh dist/NebulaTools/
           cp updater.py dist/NebulaTools/
@@ -66,16 +69,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install deps
+      - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1 libegl1 libxkbcommon0 libdbus-1-3 ffmpeg
+          sudo apt-get install -y libgl1 libegl1 libxkbcommon0 libdbus-1-3 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 \
+            libxcb-xkb1 libxkbcommon-x11-0 ffmpeg
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
       - name: Build
         run: |
           pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml:qml" --add-data "assets:assets" --add-data "flp_native:flp_native" --add-data "nebula_modules:nebula_modules" --add-data "flp_core.py:." --add-data "flp_native.py:." --add-data "updater.py:." --collect-all PySide6 --collect-all librosa main.py
-      - name: Copy updater scripts
+      - name: Copy update scripts
         run: |
           cp build/update.sh dist/NebulaTools/
           cp updater.py dist/NebulaTools/

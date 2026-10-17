@@ -61,5 +61,4 @@ def check_updates_on_startup():
 
 
 if __name__ == "__main__":
-    check_updates_on_startup()
     main()
