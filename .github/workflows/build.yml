@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
 
+# 👇 ВОТ ЭТА СТРОКА ДАЕТ ПРАВА НА СОЗДАНИЕ РЕЛИЗА
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -82,7 +86,7 @@ jobs:
           path: release-assets
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: release-assets/*.zip
         env:
