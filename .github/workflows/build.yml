@@ -3,7 +3,7 @@ name: Build & Release
 on:
   push:
     tags:
-      - 'v*' # Запускается при пуше тега, например v2.7.0
+      - 'v*'
 
 jobs:
   build-windows:
@@ -22,11 +22,13 @@ jobs:
       - name: Build with PyInstaller
         run: |
           pyinstaller --noconfirm --onedir --windowed --icon="assets/icons/logo.ico" --add-data "qml;qml" --add-data "assets;assets" --name="NebulaTools" main.py
+      - name: Zip Windows build
+        run: Compress-Archive -Path dist/NebulaTools/* -DestinationPath NebulaTools-Windows.zip
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: NebulaTools-Windows
-          path: dist/NebulaTools/
+          path: NebulaTools-Windows.zip
 
   build-macos:
     runs-on: macos-latest
@@ -41,14 +43,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
+      - name: Create macOS icon
+        run: |
+          mkdir -p assets/icons/logo.iconset
+          sips -z 16 16     assets/icons/logo.png --out assets/icons/logo.iconset/icon_16x16.png
+          sips -z 32 32     assets/icons/logo.png --out assets/icons/logo.iconset/icon_16x16@2x.png
+          sips -z 32 32     assets/icons/logo.png --out assets/icons/logo.iconset/icon_32x32.png
+          sips -z 64 64     assets/icons/logo.png --out assets/icons/logo.iconset/icon_32x32@2x.png
+          sips -z 128 128   assets/icons/logo.png --out assets/icons/logo.iconset/icon_128x128.png
+          sips -z 256 256   assets/icons/logo.png --out assets/icons/logo.iconset/icon_128x128@2x.png
+          sips -z 256 256   assets/icons/logo.png --out assets/icons/logo.iconset/icon_256x256.png
+          sips -z 512 512   assets/icons/logo.png --out assets/icons/logo.iconset/icon_256x256@2x.png
+          sips -z 512 512   assets/icons/logo.png --out assets/icons/logo.iconset/icon_512x512.png
+          cp assets/icons/logo.png assets/icons/logo.iconset/icon_512x512@2x.png
+          iconutil -c icns assets/icons/logo.iconset -o assets/icons/logo.icns
       - name: Build with PyInstaller
         run: |
           pyinstaller --noconfirm --onedir --windowed --icon="assets/icons/logo.icns" --add-data "qml:qml" --add-data "assets:assets" --name="NebulaTools" main.py
+      - name: Zip macOS build
+        run: |
+          cd dist
+          zip -r ../NebulaTools-macOS.zip NebulaTools.app
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: NebulaTools-macOS
-          path: dist/NebulaTools.app/
+          path: NebulaTools-macOS.zip
 
   release:
     needs: [build-windows, build-macos]
@@ -57,15 +77,13 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: NebulaTools-*   # Скачиваем все артефакты, начинающиеся с NebulaTools-
-          merge-multiple: true    # Объединяем их в одну папку
+          pattern: NebulaTools-*
+          merge-multiple: true
           path: release-assets
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: release-assets/**/* # Загружаем все файлы из папки release-assets в релиз
-          draft: false
-          prerelease: false
+          files: release-assets/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
