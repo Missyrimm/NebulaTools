@@ -21,19 +21,18 @@ jobs:
           pip install pyinstaller
       - name: Build
         run: |
-          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml;qml" --add-data "assets;assets" --add-data "flp_native;flp_native" --add-data "nebula_modules;nebula_modules" --add-data "flp_core.py;." --add-data "flp_native.py;." --add-data "updater.py;." --collect-all PySide6 --collect-all soundfile --collect-all essentia --collect-all audio_separator main.py
+          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml;qml" --add-data "assets;assets" --add-data "flp_native;flp_native" --add-data "nebula_modules;nebula_modules" --add-data "flp_core.py;." --add-data "flp_native.py;." --add-data "updater.py;." --collect-all PySide6 --collect-all soundfile main.py
       - name: Copy update scripts
         run: |
           copy build\update.bat dist\NebulaTools\
           copy updater.py dist\NebulaTools\
-      - name: Pack 7z
+      - name: Pack ZIP
         run: |
-          winget install --id 7zip.7zip -e --silent --accept-source-agreements --accept-package-agreements
-          & "C:\Program Files\7-Zip\7z.exe" a -t7z -mx=9 "NebulaTools-Windows.7z" ".\dist\NebulaTools\*"
+          Compress-Archive -Path "dist\NebulaTools\*" -DestinationPath "NebulaTools-Windows.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: NebulaTools-Windows.7z
+          path: NebulaTools-Windows.zip
 
   build-macos:
     runs-on: macos-latest
@@ -47,22 +46,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-          brew install p7zip
       - name: Build
         run: |
-          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml:qml" --add-data "assets:assets" --add-data "flp_native:flp_native" --add-data "nebula_modules:nebula_modules" --add-data "flp_core.py:." --add-data "flp_native.py:." --add-data "updater.py:." --collect-all PySide6 --collect-all soundfile --collect-all essentia --collect-all audio_separator main.py
+          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml:qml" --add-data "assets:assets" --add-data "flp_native:flp_native" --add-data "nebula_modules:nebula_modules" --add-data "flp_core.py:." --add-data "flp_native.py:." --add-data "updater.py:." --collect-all PySide6 --collect-all soundfile main.py
       - name: Copy update scripts
         run: |
           cp build/update.sh dist/NebulaTools/
           cp updater.py dist/NebulaTools/
           chmod +x dist/NebulaTools/update.sh
-      - name: Pack 7z
+      - name: Pack ZIP
         run: |
-          cd dist && 7z a -t7z -mx=9 ../NebulaTools-macOS.7z NebulaTools/
+          cd dist && zip -r ../NebulaTools-macOS.zip NebulaTools/
       - uses: actions/upload-artifact@v4
         with:
           name: macos-build
-          path: NebulaTools-macOS.7z
+          path: NebulaTools-macOS.zip
 
   build-linux:
     runs-on: ubuntu-latest
@@ -77,7 +75,7 @@ jobs:
           sudo apt-get install -y libgl1 libegl1 libxkbcommon0 libdbus-1-3 \
             libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
             libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 \
-            libxcb-xkb1 libxkbcommon-x11-0 ffmpeg p7zip-full
+            libxcb-xkb1 libxkbcommon-x11-0 ffmpeg zip
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
@@ -85,19 +83,19 @@ jobs:
           pip install pyinstaller
       - name: Build
         run: |
-          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml:qml" --add-data "assets:assets" --add-data "flp_native:flp_native" --add-data "nebula_modules:nebula_modules" --add-data "flp_core.py:." --add-data "flp_native.py:." --add-data "updater.py:." --collect-all PySide6 --collect-all soundfile --collect-all essentia --collect-all audio_separator main.py
+          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml:qml" --add-data "assets:assets" --add-data "flp_native:flp_native" --add-data "nebula_modules:nebula_modules" --add-data "flp_core.py:." --add-data "flp_native.py:." --add-data "updater.py:." --collect-all PySide6 --collect-all soundfile main.py
       - name: Copy update scripts
         run: |
           cp build/update.sh dist/NebulaTools/
           cp updater.py dist/NebulaTools/
           chmod +x dist/NebulaTools/update.sh
-      - name: Pack 7z
+      - name: Pack ZIP
         run: |
-          cd dist && 7z a -t7z -mx=9 ../NebulaTools-Linux.7z NebulaTools/
+          cd dist && zip -r ../NebulaTools-Linux.zip NebulaTools/
       - uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: NebulaTools-Linux.7z
+          path: NebulaTools-Linux.zip
 
   release:
     needs: [build-windows, build-macos, build-linux]
@@ -121,9 +119,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/NebulaTools-Windows.7z
-            artifacts/NebulaTools-macOS.7z
-            artifacts/NebulaTools-Linux.7z
+            artifacts/NebulaTools-Windows.zip
+            artifacts/NebulaTools-macOS.zip
+            artifacts/NebulaTools-Linux.zip
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           draft: false

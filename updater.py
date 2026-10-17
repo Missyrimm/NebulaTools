@@ -23,9 +23,9 @@ CURRENT_VERSION = "2.7.0"
 APP_NAME = "NebulaTools"
 
 ASSETS = {
-    "win32":  f"{APP_NAME}-Windows.7z",
-    "darwin": f"{APP_NAME}-macOS.7z",
-    "linux":  f"{APP_NAME}-Linux.7z",
+    "win32":  f"{APP_NAME}-Windows.zip",
+    "darwin": f"{APP_NAME}-macOS.zip",
+    "linux":  f"{APP_NAME}-Linux.zip",
 }
 
 
