@@ -137,8 +137,7 @@ Window {
                         
                         model: [
                             { key: "win32", name: "Windows" },
-                            { key: "darwin", name: "macOS" },
-                            { key: "linux", name: "Linux" }
+                            { key: "darwin", name: "macOS" }
                         ]
                         textRole: "name"
                         valueRole: "key"
@@ -298,7 +297,7 @@ Window {
                         }
                         Text {
                             text: {
-                                var is_cross = backend.targetOs !== (Qt.platform.os === "windows" ? "win32" : (Qt.platform.os === "osx" ? "darwin" : "linux"));
+                            var is_cross = backend.targetOs !== (Qt.platform.os === "windows" ? "win32" : "darwin");
                                 
                                 if (root.state === "checking") return "Проверка..."
                                 if (root.state === "ready") return "Запустить NebulaTools"
@@ -422,7 +421,7 @@ Window {
             root.remoteVersion = remoteVer
             root.progress = 0
             
-            var is_cross = backend.targetOs !== (Qt.platform.os === "windows" ? "win32" : (Qt.platform.os === "osx" ? "darwin" : "linux"));
+        var is_cross = backend.targetOs !== (Qt.platform.os === "windows" ? "win32" : "darwin");
             if (is_cross) {
                 root.statusText = "Будет скачана версия для " + osCombo.currentText + " (в папку Загрузки)."
             } else {

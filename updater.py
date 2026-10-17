@@ -25,7 +25,6 @@ APP_NAME = "NebulaTools"
 ASSETS = {
     "win32":  f"{APP_NAME}-Windows.zip",
     "darwin": f"{APP_NAME}-macOS.zip",
-    "linux":  f"{APP_NAME}-Linux.tar.gz",
 }
 
 
@@ -43,9 +42,7 @@ def _parse_version(v):
 def _platform_key():
     if sys.platform.startswith("win"):
         return "win32"
-    elif sys.platform == "darwin":
-        return "darwin"
-    return "linux"
+    return "darwin"
 
 
 def check_for_updates():

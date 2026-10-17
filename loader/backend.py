@@ -18,15 +18,13 @@ APP_NAME = "NebulaTools"
 # Папка установки для текущей ОС
 if sys.platform == "win32":
     INSTALL_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / APP_NAME
-elif sys.platform == "darwin":
-    INSTALL_DIR = Path.home() / "Applications" / APP_NAME
 else:
-    INSTALL_DIR = Path.home() / ".local" / "share" / APP_NAME
+    # Все остальные ОС (macOS) будут ставиться сюда
+    INSTALL_DIR = Path.home() / "Applications" / APP_NAME
 
 ASSETS = {
     "win32":  f"{APP_NAME}-Windows.zip",
     "darwin": f"{APP_NAME}-macOS.zip",
-    "linux":  f"{APP_NAME}-Linux.tar.gz",
 }
 
 VERSION_FILE = INSTALL_DIR / "version.txt"
@@ -56,10 +54,8 @@ class LoaderBackend(QObject):
         # Автоопределение текущей ОС
         if sys.platform.startswith("win"):
             self._target_os = "win32"
-        elif sys.platform == "darwin":
-            self._target_os = "darwin"
         else:
-            self._target_os = "linux"
+            self._target_os = "darwin"
 
     @Property(str, notify=targetOsChanged)
     def targetOs(self):
