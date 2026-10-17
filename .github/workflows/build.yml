@@ -3,85 +3,69 @@ name: Build & Release
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
+      - 'v*' # Запускается при пуше тега, например v2.7.0
 
 jobs:
   build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-      - name: Build
+      - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml;qml" --add-data "assets;assets" --add-data "flp_native;flp_native" --add-data "nebula_modules;nebula_modules" --add-data "flp_core.py;." --add-data "flp_native.py;." --add-data "updater.py;." --collect-all PySide6 --collect-all soundfile main.py
-      - name: Copy update scripts
-        run: |
-          copy build\update.bat dist\NebulaTools\
-          copy updater.py dist\NebulaTools\
-      - name: Pack ZIP
-        run: |
-          Compress-Archive -Path "dist\NebulaTools\*" -DestinationPath "NebulaTools-Windows.zip"
-      - uses: actions/upload-artifact@v4
+          pyinstaller --noconfirm --onedir --windowed --icon="assets/icons/logo.ico" --add-data "qml;qml" --add-data "assets;assets" --name="NebulaTools" main.py
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: windows-build
-          path: NebulaTools-Windows.zip
+          name: NebulaTools-Windows
+          path: dist/NebulaTools/
 
   build-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-      - name: Build
+      - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml:qml" --add-data "assets:assets" --add-data "flp_native:flp_native" --add-data "nebula_modules:nebula_modules" --add-data "flp_core.py:." --add-data "flp_native.py:." --add-data "updater.py:." --collect-all PySide6 --collect-all soundfile main.py
-      - name: Copy update scripts
-        run: |
-          cp build/update.sh dist/NebulaTools/
-          cp updater.py dist/NebulaTools/
-          chmod +x dist/NebulaTools/update.sh
-      - name: Pack ZIP
-        run: |
-          python -c "import shutil; shutil.make_archive('NebulaTools-macOS', 'zip', 'dist', 'NebulaTools')"
-      - uses: actions/upload-artifact@v4
+          pyinstaller --noconfirm --onedir --windowed --icon="assets/icons/logo.icns" --add-data "qml:qml" --add-data "assets:assets" --name="NebulaTools" main.py
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: macos-build
-          path: NebulaTools-macOS.zip
+          name: NebulaTools-macOS
+          path: dist/NebulaTools.app/
 
   release:
     needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          name: windows-build
-          path: artifacts/
-      - uses: actions/download-artifact@v4
+          pattern: NebulaTools-*   # Скачиваем все артефакты, начинающиеся с NebulaTools-
+          merge-multiple: true    # Объединяем их в одну папку
+          path: release-assets
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: macos-build
-          path: artifacts/
-      - uses: actions/download-artifact@v4
-        with:
-          files: |
-            artifacts/NebulaTools-Windows.zip
-            artifacts/NebulaTools-macOS.zip
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          files: release-assets/**/* # Загружаем все файлы из папки release-assets в релиз
           draft: false
           prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
