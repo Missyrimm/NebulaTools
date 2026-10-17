@@ -56,7 +56,7 @@ jobs:
           chmod +x dist/NebulaTools/update.sh
       - name: Pack ZIP
         run: |
-          cd dist && zip -r ../NebulaTools-macOS.zip NebulaTools/
+          python -c "import shutil; shutil.make_archive('NebulaTools-macOS', 'zip', 'dist', 'NebulaTools')"
       - uses: actions/upload-artifact@v4
         with:
           name: macos-build
@@ -91,7 +91,7 @@ jobs:
           chmod +x dist/NebulaTools/update.sh
       - name: Pack ZIP
         run: |
-          cd dist && zip -r ../NebulaTools-Linux.zip NebulaTools/
+          python -c "import shutil; shutil.make_archive('NebulaTools-Linux', 'zip', 'dist', 'NebulaTools')"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-build
