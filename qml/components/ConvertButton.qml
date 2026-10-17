@@ -12,6 +12,7 @@ Item {
     property int progress: 0
     property bool success: false
     property bool failed: false
+    property bool hovered: false
 
     signal clicked
 
@@ -21,13 +22,16 @@ Item {
         id: body
         anchors.fill: parent
         radius: Theme.radius
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0.0; color: root.failed ? Theme.error : Theme.accentStart }
-            GradientStop { position: 1.0; color: root.failed ? "#C62828" : Theme.accentEnd }
+
+        color: {
+            if (root.failed) return Theme.error
+            if (root.hovered) return Theme.accentHover
+            return Theme.accent
         }
 
-        y: hov.hovered && !root.busy ? -2 : 0
+        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+
+        y: root.hovered && !root.busy ? -2 : 0
         Behavior on y { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
 
         scale: tap.pressed && !root.busy ? 0.985 : 1.0
@@ -39,8 +43,8 @@ Item {
             radius: parent.radius + 4
             color: "transparent"
             border.width: 2
-            border.color: Theme.accentGlow
-            opacity: hov.hovered ? 1 : 0
+            border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.5)
+            opacity: root.hovered ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
         }
 
@@ -101,7 +105,11 @@ Item {
             }
         }
 
-        HoverHandler { id: hov; cursorShape: Qt.PointingHandCursor }
+        HoverHandler {
+            id: hoverHandler
+            cursorShape: Qt.PointingHandCursor
+            onHoveredChanged: root.hovered = hoverHandler.hovered
+        }
 
         TapHandler {
             id: tap

@@ -1,10 +1,11 @@
 import QtQuick
 import QtQuick.Layouts
 import Nebula 1.0
+import QtQuick.Controls
 
 Rectangle {
     id: root
-    height: 34
+    height: 40
     color: "transparent"
 
     property string text: "Готов к работе"
@@ -14,8 +15,9 @@ Rectangle {
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceL
         anchors.rightMargin: Theme.spaceL
-        spacing: 8
+        spacing: Theme.spaceS
 
+        // Статус
         Rectangle {
             width: 8; height: 8
             radius: 4
@@ -24,7 +26,7 @@ Rectangle {
             SequentialAnimation on opacity {
                 loops: Animation.Infinite
                 running: root.Window.window.visibility !== Window.Minimized
-                NumberAnimation { to: 0.5; duration: 1400; easing.type: Easing.InOutSine }
+                NumberAnimation { to: 0.4; duration: 1400; easing.type: Easing.InOutSine }
                 NumberAnimation { to: 1.0; duration: 1400; easing.type: Easing.InOutSine }
             }
         }
@@ -38,47 +40,58 @@ Rectangle {
 
         Item { Layout.fillWidth: true }
 
-        Row {
-            spacing: 6
-            Layout.alignment: Qt.AlignVCenter
+        // Соцфутер
+        RowLayout {
+            spacing: 0
 
             Text {
-                text: "by"
-                color: Theme.textSecondary
+                text: "by "
+                color: Theme.textTertiary
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSmall
             }
 
             Text {
-                text: backend.authorHandle
+                id: authorLink
+                text: "@youngweepo"
                 color: Theme.accent
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSmall
                 font.weight: Font.DemiBold
-                MouseArea {
-                    anchors.fill: parent
+
+                HoverHandler {
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Qt.openUrlExternally(backend.authorUrl)
+                    onHoveredChanged: authorLink.font.underline = hovered
+                }
+                TapHandler {
+                    onTapped: Qt.openUrlExternally("https://t.me/youngweepo")
                 }
             }
 
-            Text {
-                text: "·"
-                color: Theme.textSecondary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSmall
+            // Разделитель
+            Rectangle {
+                width: 4; height: 4
+                radius: 2
+                color: Theme.textTertiary
+                Layout.leftMargin: 8
+                Layout.rightMargin: 8
+                Layout.alignment: Qt.AlignVCenter
             }
 
             Text {
-                text: backend.channelHandle || backend.channelName
+                id: channelLink
+                text: "@nebulatools"
                 color: Theme.accent
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSmall
                 font.weight: Font.DemiBold
-                MouseArea {
-                    anchors.fill: parent
+
+                HoverHandler {
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Qt.openUrlExternally(backend.channelUrl)
+                    onHoveredChanged: channelLink.font.underline = hovered
+                }
+                TapHandler {
+                    onTapped: Qt.openUrlExternally("https://t.me/nebulatools")
                 }
             }
         }

@@ -1,6 +1,6 @@
 """
-Генератор MIDI-мелодий с гарантией уникальности.
-Каждый вызов даёт новую мелодию — даже в одну микросекунду.
+melody_module — генератор MIDI с реальными различиями по жанрам.
+Каждый жанр — свои ритмы, плотность нот, скорость баса, аккордовые расширения.
 """
 import io
 import random
@@ -26,26 +26,35 @@ SCALES = {
 KEY_NAMES = ["C", "C#", "D", "D#", "E", "F",
              "F#", "G", "G#", "A", "A#", "B"]
 
-# Веса ступеней: I (0) и V (4) чаще, iii (2) и vii (6) реже
-STEP_WEIGHTS = [4, 1, 2, 4, 2, 3, 1]
-
-# Жанровые подсказки — только для весов, не для шаблонов
-GENRE_BIAS = {
-    "pop":   [4, 1, 2, 4, 2, 3, 1],
-    "jazz":  [3, 2, 2, 3, 3, 2, 1],
-    "edm":   [4, 1, 1, 4, 3, 2, 0],
-    "lofi":  [3, 2, 3, 3, 2, 3, 1],
-    "epic":  [4, 1, 1, 4, 3, 1, 1],
-    "blues": [4, 0, 0, 4, 2, 1, 0],
+# Каждый жанр: свои настройки ритма, плотности, баса, аккордов
+GENRES = {
+    "pop":        {"density": 0.7, "durations": [0.5, 1.0, 1.5], "pause": 0.2, "bass": "root", "vel": (70, 100), "chord_ext": 0.1},
+    "hip-hop":    {"density": 0.5, "durations": [0.5, 1.0, 2.0], "pause": 0.3, "bass": "root5", "vel": (60, 95), "chord_ext": 0.15},
+    "trap":       {"density": 1.4, "durations": [0.25, 0.25, 0.5, 1.0], "pause": 0.1, "bass": "808", "vel": (50, 85), "chord_ext": 0.2},
+    "drill":      {"density": 1.3, "durations": [0.25, 0.5, 1.0], "pause": 0.15, "bass": "slide", "vel": (55, 90), "chord_ext": 0.15},
+    "phonk":      {"density": 0.9, "durations": [0.25, 0.5, 1.0], "pause": 0.2, "bass": "808", "vel": (60, 90), "chord_ext": 0.1},
+    "lofi":       {"density": 0.5, "durations": [0.5, 0.75, 1.0, 1.5], "pause": 0.35, "bass": "root", "vel": (55, 80), "chord_ext": 0.4},
+    "chill":      {"density": 0.4, "durations": [1.0, 1.5, 2.0], "pause": 0.4, "bass": "root", "vel": (55, 80), "chord_ext": 0.35},
+    "ambient":    {"density": 0.2, "durations": [2.0, 3.0, 4.0], "pause": 0.6, "bass": "root", "vel": (40, 65), "chord_ext": 0.5},
+    "jazz":       {"density": 0.8, "durations": [0.25, 0.5, 1.0, 2.0], "pause": 0.15, "bass": "walking", "vel": (55, 90), "chord_ext": 0.8},
+    "blues":      {"density": 0.7, "durations": [0.5, 0.75, 1.0, 1.5], "pause": 0.2, "bass": "shuffle", "vel": (65, 95), "chord_ext": 0.4},
+    "funk":       {"density": 1.2, "durations": [0.25, 0.25, 0.5, 1.0], "pause": 0.1, "bass": "syncopated", "vel": (70, 105), "chord_ext": 0.3},
+    "rnb":        {"density": 0.6, "durations": [0.5, 1.0, 1.5], "pause": 0.25, "bass": "root", "vel": (55, 85), "chord_ext": 0.7},
+    "gospel":     {"density": 0.8, "durations": [0.5, 1.0, 1.5], "pause": 0.2, "bass": "root", "vel": (60, 95), "chord_ext": 0.9},
+    "edm":        {"density": 1.0, "durations": [0.25, 0.5, 1.0], "pause": 0.15, "bass": "root8", "vel": (75, 105), "chord_ext": 0.15},
+    "house":      {"density": 0.8, "durations": [0.5, 1.0], "pause": 0.2, "bass": "root5", "vel": (75, 100), "chord_ext": 0.25},
+    "techno":     {"density": 1.0, "durations": [0.25, 0.5, 1.0], "pause": 0.2, "bass": "root", "vel": (75, 100), "chord_ext": 0.1},
+    "dnb":        {"density": 1.5, "durations": [0.125, 0.25, 0.5], "pause": 0.1, "bass": "reese", "vel": (70, 100), "chord_ext": 0.15},
+    "riddim":     {"density": 1.3, "durations": [0.25, 0.5, 1.0], "pause": 0.15, "bass": "wobble", "vel": (80, 110), "chord_ext": 0.05},
+    "epic":       {"density": 0.6, "durations": [1.0, 2.0, 3.0], "pause": 0.3, "bass": "root8", "vel": (75, 105), "chord_ext": 0.6},
+    "cinematic":  {"density": 0.4, "durations": [1.0, 2.0, 4.0], "pause": 0.4, "bass": "root", "vel": (60, 95), "chord_ext": 0.7},
 }
 
-# История хэшей для защиты от дублей
 _HISTORY = []
 _MAX_HISTORY = 50
 
 
 def _note_signature(mid):
-    """Хэш от всех нот (без метаданных)."""
     parts = []
     for track in mid.tracks:
         for msg in track:
@@ -60,56 +69,43 @@ def _scale_note(base_midi, scale, degree):
 
 
 def _make_progression(bars, rng, genre):
-    """Полностью случайная прогрессия с музыкальными весами."""
-    weights = GENRE_BIAS.get(genre, STEP_WEIGHTS)
-    pattern_type = rng.choices(
-        ["simple", "pattern", "random", "modal"],
-        weights=[4, 3, 2, 1]
-    )[0]
-
-    if pattern_type == "simple":
-        # A A A A — 4 аккорда повторяются
-        base = [rng.choices(range(7), weights=weights)[0] for _ in range(4)]
-        return [base[i % 4] for i in range(bars)]
-
-    elif pattern_type == "pattern":
-        # A B A C — волна
-        a = rng.choices(range(7), weights=weights)[0]
-        b = rng.choices(range(7), weights=weights)[0]
-        c = rng.choices(range(7), weights=weights)[0]
-        pat = [a, b, a, c]
-        return [pat[i % 4] for i in range(bars)]
-
-    elif pattern_type == "modal":
-        # Медленное движение: каждый аккорд — ±1-2 ступени от предыдущего
-        prog = [rng.choices(range(7), weights=weights)[0]]
-        for _ in range(bars - 1):
-            delta = rng.choice([-2, -1, -1, 0, 1, 1, 2])
-            prog.append((prog[-1] + delta) % 7)
-        return prog
-
-    else:
-        # Полный рандом
-        return [rng.choices(range(7), weights=weights)[0] for _ in range(bars)]
+    """Строит прогрессию в зависимости от жанра."""
+    if genre == "blues":
+        base = [0, 0, 0, 0, 3, 3, 0, 0, 4, 4, 0, 0, 3, 4, 0, 0]
+        return [base[i % len(base)] for i in range(bars)]
+    if genre in ("jazz", "rnb", "gospel"):
+        # ii-V-I или I-vi-IV-V
+        patterns = [
+            [1, 4, 0, 5], [0, 5, 3, 4], [1, 4, 0, 0]
+        ]
+        pat = rng.choice(patterns)
+        return [pat[i % len(pat)] for i in range(bars)]
+    if genre in ("edm", "house", "techno"):
+        # Простые: I-V-vi-IV
+        pat = [0, 4, 5, 3]
+        return [pat[i % len(pat)] for i in range(bars)]
+    # Все остальные — рандом с тяготением к I и V
+    weights = [4, 1, 2, 4, 2, 3, 1]
+    return [rng.choices(range(7), weights=weights)[0] for _ in range(bars)]
 
 
 def _build_melody(key, scale, genre, bars, bpm, rng):
-    """Собирает MIDI в память. Возвращает bytes."""
     if key not in KEY_NAMES:
         key = rng.choice(KEY_NAMES)
     if scale not in SCALES:
         scale = rng.choice(list(SCALES.keys()))
-    if genre not in GENRE_BIAS:
-        genre = rng.choice(list(GENRE_BIAS.keys()))
+    if genre not in GENRES:
+        genre = rng.choice(list(GENRES.keys()))
 
+    cfg = GENRES[genre]
     key_idx = KEY_NAMES.index(key)
     base = 60 + key_idx
     scale_notes = SCALES[scale]
 
     progression = _make_progression(bars, rng, genre)
 
-    # Случайная модуляция: в середине прогрессии сдвиг тональности
-    if rng.random() < 0.2 and bars >= 4:
+    # Модуляция
+    if rng.random() < 0.15 and bars >= 4:
         mod_point = bars // 2
         mod_shift = rng.choice([-5, -2, 2, 5, 7])
     else:
@@ -122,7 +118,6 @@ def _build_melody(key, scale, genre, bars, bpm, rng):
     chord_track = MidiTrack()
     mid.tracks.extend([mel_track, bass_track, chord_track])
 
-    # Уникальное имя трека — гарантирует разницу даже при совпадении нот
     unique_tag = f"NT-{int(time.time_ns())}-{rng.randint(1000, 9999)}"
     for track, name in zip(
         (mel_track, bass_track, chord_track),
@@ -135,46 +130,45 @@ def _build_melody(key, scale, genre, bars, bpm, rng):
     total_beats = bars * beats_per_bar
 
     # ---------- МЕЛОДИЯ ----------
-    # Случайная октава мелодии: +0, +12, +24
     melody_octave = rng.choices([0, 12, 24], weights=[2, 3, 1])[0]
-
-    # Случайный диапазон ступеней (иногда узкий, иногда широкий)
     range_top = rng.choices(
         [len(scale_notes) - 1, len(scale_notes), len(scale_notes) * 2 - 1],
         weights=[2, 3, 2]
     )[0]
 
+    # Плотность нот из конфига жанра
+    density = cfg["density"]
+    durations = cfg["durations"]
+    pause_prob = cfg["pause"]
+    vel_lo, vel_hi = cfg["vel"]
+
     beats_used = 0.0
     while beats_used < total_beats - 0.25:
+        # Чем выше density, тем чаще генерируем ноту
+        if rng.random() > min(1.0, density):
+            # Пропускаем долю (пауза)
+            skip = rng.choice(durations) * 0.5
+            beats_used += skip
+            continue
+
         degree = rng.randint(0, range_top)
         current_base = base + 12 + melody_octave
 
-        # Модуляция на второй половине
         if beats_used >= mod_point * beats_per_bar:
             current_base += mod_shift
 
         note = _scale_note(current_base, scale_notes, degree)
 
-        # Случайная длительность: 1/32, 1/16, 1/8, четверть, половинная, триоль
-        dur_beats = rng.choices(
-            [0.125, 0.25, 0.375, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0],
-            weights=[1, 4, 2, 6, 3, 5, 3, 1, 1]
-        )[0]
+        dur_beats = rng.choice(durations)
         dur_ticks = int(dur_beats * ticks_per_beat)
 
-        # Паузы
-        pause_beats = rng.choices(
-            [0, 0.125, 0.25, 0.5, 0.75, 1.0],
-            weights=[10, 2, 3, 2, 1, 1]
-        )[0]
+        pause_beats = 0 if rng.random() > pause_prob else rng.choice([0.25, 0.5])
         pause_ticks = int(pause_beats * ticks_per_beat)
 
-        vel = rng.randint(40, 120)
+        vel = rng.randint(vel_lo, vel_hi)
 
-        mel_track.append(Message("note_on", note=note,
-                                 velocity=vel, time=pause_ticks))
-        mel_track.append(Message("note_off", note=note,
-                                 velocity=0, time=dur_ticks))
+        mel_track.append(Message("note_on", note=note, velocity=vel, time=pause_ticks))
+        mel_track.append(Message("note_off", note=note, velocity=0, time=dur_ticks))
 
         beats_used += dur_beats + pause_beats
 
@@ -182,7 +176,6 @@ def _build_melody(key, scale, genre, bars, bpm, rng):
     for bar in range(bars):
         root_degree = progression[bar]
         cur_base = base
-
         if bar >= mod_point:
             cur_base += mod_shift
 
@@ -192,29 +185,24 @@ def _build_melody(key, scale, genre, bars, bpm, rng):
 
         notes = [root, third, fifth]
 
-        # Расширения: 7-я ступень (30%), 9-я (15%)
-        if rng.random() < 0.3:
+        # Расширения в зависимости от жанра
+        if rng.random() < cfg["chord_ext"]:
             notes.append(_scale_note(cur_base, scale_notes, root_degree + 6))
-        if rng.random() < 0.15:
+        if rng.random() < cfg["chord_ext"] * 0.5:
             notes.append(_scale_note(cur_base, scale_notes, root_degree + 8))
 
-        # Иногда добавляем басовую ноту октавой ниже
-        if rng.random() < 0.3:
-            notes.append(root - 12)
-
-        # Арпеджио или блок-аккорд (30% арпеджио)
-        if rng.random() < 0.3:
-            # Арпеджио — по очереди
+        # Арпеджио для некоторых жанров
+        arp = genre in ("house", "techno", "edm") and rng.random() < 0.5
+        if arp:
             step_ticks = (ticks_per_beat * beats_per_bar) // len(notes)
             for i, n in enumerate(notes):
                 chord_track.append(Message("note_on", note=n,
-                                           velocity=rng.randint(50, 80),
+                                           velocity=rng.randint(vel_lo, vel_hi),
                                            time=0))
                 chord_track.append(Message("note_off", note=n,
                                            velocity=0, time=step_ticks))
         else:
-            # Блок-аккорд
-            vel = rng.randint(50, 80)
+            vel = rng.randint(vel_lo, vel_hi)
             for n in notes:
                 chord_track.append(Message("note_on", note=n, velocity=vel, time=0))
             for n in notes:
@@ -222,48 +210,85 @@ def _build_melody(key, scale, genre, bars, bpm, rng):
                                            time=ticks_per_beat * beats_per_bar))
 
     # ---------- БАС ----------
-    # Случайная октава: -24 или -12
-    bass_octave = rng.choice([-24, -12])
+    bass_octave = -24 if genre in ("trap", "drill", "phonk", "edm", "riddim") else rng.choice([-24, -12])
+    bass_style = cfg["bass"]
 
     for bar in range(bars):
         root_degree = progression[bar]
         cur_base = base
-
         if bar >= mod_point:
             cur_base += mod_shift
 
         root = _scale_note(cur_base + bass_octave, scale_notes, root_degree)
 
-        # Случайный ритмический рисунок из 8 вариантов
-        rhythm = rng.choice([
-            [1, 1, 1, 1],              # четверти
-            [0.5, 0.5, 1, 2],          # синкопа
-            [2, 2],                    # половины
-            [1, 0.5, 0.5, 2],          # смешанный
-            [1.5, 0.5, 1, 1],          # пунктир
-            [0.25, 0.25, 0.5, 1, 2],   # 16-е
-            [3, 1],                    # длинная + короткая
-            [0.5, 0.5, 0.5, 0.5, 1, 1],# восьмые + четверти
-        ])
+        if bass_style == "808":
+            # Долгие 808-ноты с редкими сменами
+            for _ in range(2):
+                play_note = root
+                if rng.random() < 0.3:
+                    play_note = _scale_note(cur_base + bass_octave, scale_notes, root_degree + 3)
+                chord_track.append(Message("note_on", note=play_note,
+                                           velocity=rng.randint(vel_lo, vel_hi), time=0))
+                bass_track.append(Message("note_on", note=play_note,
+                                          velocity=rng.randint(vel_lo, vel_hi), time=0))
+                bass_track.append(Message("note_off", note=play_note,
+                                          velocity=0, time=ticks_per_beat * 2))
+        elif bass_style == "walking":
+            # Джазовый walking bass — четверти с шагом
+            step = rng.choice([2, 3, 4])
+            for i in range(4):
+                play_note = _scale_note(cur_base + bass_octave, scale_notes,
+                                        root_degree + (i * step) % 7)
+                bass_track.append(Message("note_on", note=play_note,
+                                          velocity=rng.randint(vel_lo, vel_hi),
+                                          time=0))
+                bass_track.append(Message("note_off", note=play_note,
+                                          velocity=0, time=ticks_per_beat - 5))
+        elif bass_style == "syncopated":
+            # Синкопы — короткие ноты со сдвигом
+            rhythm = [0.5, 0.25, 0.25, 0.75, 0.25, 2.0]
+            for length in rhythm:
+                play_note = root
+                if rng.random() < 0.3:
+                    play_note = _scale_note(cur_base + bass_octave, scale_notes, root_degree + 4)
+                ticks = int(length * ticks_per_beat)
+                bass_track.append(Message("note_on", note=play_note,
+                                          velocity=rng.randint(vel_lo, vel_hi), time=0))
+                bass_track.append(Message("note_off", note=play_note,
+                                          velocity=0, time=ticks))
+        elif bass_style == "root8":
+            # Октавы — 8-е ноты
+            for i in range(8):
+                play_note = root if i % 2 == 0 else root + 12
+                ticks = ticks_per_beat // 2
+                bass_track.append(Message("note_on", note=play_note,
+                                          velocity=rng.randint(vel_lo, vel_hi), time=0))
+                bass_track.append(Message("note_off", note=play_note,
+                                          velocity=0, time=ticks))
+        elif bass_style in ("root5", "reese", "wobble", "slide"):
+            # Долгие ноты с редкими переходами
+            rhythm = [1.0, 1.0, 2.0] if rng.random() < 0.5 else [2.0, 2.0]
+            for length in rhythm:
+                play_note = root
+                if bass_style == "root5" and rng.random() < 0.3:
+                    play_note = _scale_note(cur_base + bass_octave, scale_notes, root_degree + 4)
+                if bass_style == "slide" and rng.random() < 0.4:
+                    play_note = _scale_note(cur_base + bass_octave, scale_notes, root_degree + 2)
+                ticks = int(length * ticks_per_beat)
+                bass_track.append(Message("note_on", note=play_note,
+                                          velocity=rng.randint(vel_lo, vel_hi), time=0))
+                bass_track.append(Message("note_off", note=play_note,
+                                          velocity=0, time=ticks))
+        else:
+            # "root" — простые четверти/половины
+            rhythm = [1.0, 1.0, 1.0, 1.0] if rng.random() < 0.5 else [2.0, 2.0]
+            for length in rhythm:
+                ticks = int(length * ticks_per_beat)
+                bass_track.append(Message("note_on", note=root,
+                                          velocity=rng.randint(vel_lo, vel_hi), time=0))
+                bass_track.append(Message("note_off", note=root,
+                                          velocity=0, time=ticks))
 
-        for length in rhythm:
-            # Случайный интервал: тоника, квинта, октава, терция
-            interval = rng.choices(
-                [0, 4, 7, 12],
-                weights=[5, 1, 2, 2]
-            )[0]
-            play_note = _scale_note(cur_base + bass_octave, scale_notes,
-                                    root_degree + interval)
-
-            ticks = int(length * ticks_per_beat)
-            vel = rng.randint(70, 110)
-
-            bass_track.append(Message("note_on", note=play_note,
-                                      velocity=vel, time=0))
-            bass_track.append(Message("note_off", note=play_note,
-                                      velocity=0, time=ticks))
-
-    # Сохраняем в bytes
     buf = io.BytesIO()
     mid.save(file=buf)
     return buf.getvalue(), mid
@@ -271,15 +296,9 @@ def _build_melody(key, scale, genre, bars, bpm, rng):
 
 def generate_melody(key=None, scale=None, genre=None, bars=4, bpm=120,
                     output="melody.mid", seed=None):
-    """
-    Генерирует MIDI-мелодию. Гарантирует уникальность:
-    проверяет хэш против последних 50 сгенерированных.
-    """
-    # Уникальный seed по времени в наносекундах
     if seed is None:
         seed = time.time_ns() ^ random.randint(0, 2**31 - 1)
 
-    # До 15 попыток, чтобы избежать дубля
     result_bytes = None
     signature = None
 
@@ -287,28 +306,26 @@ def generate_melody(key=None, scale=None, genre=None, bars=4, bpm=120,
         rng = random.Random(seed + attempt * 7919)
         data, mid = _build_melody(key, scale, genre, bars, bpm, rng)
         sig = _note_signature(mid)
-
         if sig not in _HISTORY:
             result_bytes = data
             signature = sig
             break
-
         if attempt == 14:
-            # Даже после 15 попыток дубль — принимаем
             result_bytes = data
             signature = sig
 
-    # Запоминаем
     _HISTORY.append(signature)
     if len(_HISTORY) > _MAX_HISTORY:
         _HISTORY.pop(0)
 
-    # Сохраняем
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     Path(output).write_bytes(result_bytes)
     return output
 
 
+def list_genres():
+    return list(GENRES.keys())
+
+
 def clear_history():
-    """Сбрасывает историю (полезно при тестах)."""
     _HISTORY.clear()

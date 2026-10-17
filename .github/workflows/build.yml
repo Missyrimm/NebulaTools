@@ -21,7 +21,7 @@ jobs:
           pip install pyinstaller
       - name: Build
         run: |
-          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml;qml" --add-data "assets;assets" --add-data "flp_native;flp_native" --add-data "nebula_modules;nebula_modules" --add-data "flp_core.py;." --add-data "flp_native.py;." --add-data "updater.py;." --collect-all PySide6 --collect-all soundfile main.py
+          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml;qml" --add-data "assets;assets" --add-data "flp_native;flp_native" --add-data "nebula_modules;nebula_modules" --add-data "flp_core.py;." --add-data "flp_native.py;." --add-data "updater.py;." --collect-all PySide6 --collect-all soundfile --collect-all essentia --collect-all audio_separator main.py
       - name: Copy update scripts
         run: |
           copy build\update.bat dist\NebulaTools\
@@ -50,7 +50,7 @@ jobs:
           brew install p7zip
       - name: Build
         run: |
-          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml:qml" --add-data "assets:assets" --add-data "flp_native:flp_native" --add-data "nebula_modules:nebula_modules" --add-data "flp_core.py:." --add-data "flp_native.py:." --add-data "updater.py:." --collect-all PySide6 --collect-all soundfile main.py
+          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml:qml" --add-data "assets:assets" --add-data "flp_native:flp_native" --add-data "nebula_modules:nebula_modules" --add-data "flp_core.py:." --add-data "flp_native.py:." --add-data "updater.py:." --collect-all PySide6 --collect-all soundfile --collect-all essentia --collect-all audio_separator main.py
       - name: Copy update scripts
         run: |
           cp build/update.sh dist/NebulaTools/
@@ -85,7 +85,7 @@ jobs:
           pip install pyinstaller
       - name: Build
         run: |
-          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml:qml" --add-data "assets:assets" --add-data "flp_native:flp_native" --add-data "nebula_modules:nebula_modules" --add-data "flp_core.py:." --add-data "flp_native.py:." --add-data "updater.py:." --collect-all PySide6 --collect-all soundfile main.py
+          pyinstaller --noconfirm --windowed --name "NebulaTools" --add-data "qml:qml" --add-data "assets:assets" --add-data "flp_native:flp_native" --add-data "nebula_modules:nebula_modules" --add-data "flp_core.py:." --add-data "flp_native.py:." --add-data "updater.py:." --collect-all PySide6 --collect-all soundfile --collect-all essentia --collect-all audio_separator main.py
       - name: Copy update scripts
         run: |
           cp build/update.sh dist/NebulaTools/

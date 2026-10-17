@@ -8,7 +8,7 @@ Rectangle {
     height: 44
     color: "transparent"
 
-    property string sectionName: "Конвертер"
+    property string sectionName: "Главная"
 
     signal minimizeClicked
     signal maximizeClicked
@@ -29,21 +29,18 @@ Rectangle {
         anchors.rightMargin: Theme.spaceS
         spacing: Theme.spaceS
 
-        Image {
-            id: logoIcon
-            source: "../../assets/icons/logo.png"
-            sourceSize.width: 20
-            sourceSize.height: 20
-            fillMode: Image.PreserveAspectFit
+        Rectangle {
+            width: 22; height: 22
+            radius: 6
+            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.15)
             Layout.alignment: Qt.AlignVCenter
-            visible: status === Image.Ready
-        }
-
-        Text {
-            text: "🥕"
-            font.pixelSize: 16
-            Layout.alignment: Qt.AlignVCenter
-            visible: logoIcon.status !== Image.Ready
+            Text {
+                anchors.centerIn: parent
+                text: "\uE8AB"
+                font.family: Theme.iconFamily
+                font.pixelSize: 11
+                color: Theme.accent
+            }
         }
 
         Text {
@@ -68,13 +65,6 @@ Rectangle {
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSmall
             Layout.alignment: Qt.AlignVCenter
-
-            Behavior on text {
-                SequentialAnimation {
-                    NumberAnimation { target: titleBar.sectionText; property: "opacity"; to: 0; duration: 100 }
-                    NumberAnimation { target: titleBar.sectionText; property: "opacity"; to: 1; duration: 150 }
-                }
-            }
         }
 
         Item { Layout.fillWidth: true }
@@ -92,6 +82,7 @@ Rectangle {
                 property string glyph: ""
                 property color glyphColor: Theme.textSecondary
                 property color hoverColor: Theme.surfaceHover
+                property bool isClose: false
 
                 signal clicked
 
@@ -110,9 +101,11 @@ Rectangle {
                 Text {
                     anchors.centerIn: parent
                     text: btn.glyph
-                    color: hovHandler.hovered
-                        ? (btn.hoverColor === "#E81123" ? "#FFFFFF" : btn.glyphColor)
-                        : btn.glyphColor
+                    color: {
+                        if (!hovHandler.hovered) return btn.glyphColor
+                        if (btn.isClose) return "#FFFFFF"
+                        return btn.glyphColor
+                    }
                     font.family: Theme.iconFamily
                     font.pixelSize: 10
                 }
@@ -130,8 +123,8 @@ Rectangle {
 
             WinBtn {
                 glyph: "\uE8BB"
+                isClose: true
                 hoverColor: "#E81123"
-                glyphColor: Theme.textSecondary
                 onClicked: titleBar.closeClicked()
             }
         }

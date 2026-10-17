@@ -15,8 +15,8 @@ Item {
         anchors.fill: parent
         radius: height / 2
         color: root.checked
-               ? Qt.rgba(1.0, 0.478, 0.102, 0.85)
-               : Theme.surfaceHover
+            ? Theme.accent
+            : Theme.surfaceHover
         border.width: root.checked ? 0 : 1
         border.color: Theme.border
 

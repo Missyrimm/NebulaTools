@@ -11,56 +11,95 @@ Item {
     property string audioName: ""
     property string status: ""
     property bool statusError: false
-
     property bool analyzed: false
     property real detectedBpm: 0
     property string detectedKey: ""
     property real detectedConfidence: 0
 
+    opacity: 0
+    Component.onCompleted: fadeAnim.start()
+    onVisibleChanged: if (visible) { opacity = 0; fadeAnim.start() }
+
+    NumberAnimation {
+        id: fadeAnim
+        target: page
+        property: "opacity"
+        from: 0
+        to: 1
+        duration: 300
+        easing.type: Easing.OutCubic
+    }
+
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: Theme.spaceL
+        anchors.leftMargin: Theme.spaceXxl
+        anchors.rightMargin: Theme.spaceXxl
+        anchors.topMargin: Theme.spaceXl
+        anchors.bottomMargin: Theme.spaceL
         spacing: Theme.spaceL
 
-        Rectangle {
+        PageHeader {
+            Layout.fillWidth: true
+            label: "NEBULATOOLS · SLICER"
+            title: "Рандомная нарезка сэмплов"
+            subtitle: "Анализирует BPM и тональность, нарезает аудио по битам и собирает новый бит."
+        }
+
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: Theme.radius
-            color: Theme.surface
-            border.color: Theme.border
-            border.width: 1
+            spacing: Theme.spaceL
 
+            // Левая колонка — drop zone + анализ
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: Theme.spaceL
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.preferredWidth: 560
                 spacing: Theme.spaceL
-
-                Text {
-                    text: "Рандомная нарезка сэмплов"
-                    color: Theme.textPrimary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontH2
-                    font.weight: Font.DemiBold
-                }
-
-                Text {
-                    text: "Нарезает аудио по битам и собирает новый бит"
-                    color: Theme.textSecondary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSmall
-                }
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 140
-                    radius: Theme.radiusSmall
-                    color: Theme.surfaceHover
+                    Layout.preferredHeight: 240
+                    radius: Theme.radiusLarge
+                    color: Theme.surface
                     border.color: dropArea.containsDrag ? Theme.accent : Theme.border
                     border.width: dropArea.containsDrag ? 2 : 1
 
                     ColumnLayout {
-                        anchors.centerIn: parent
-                        spacing: 12
+                        anchors.fill: parent
+                        anchors.margins: Theme.spaceL
+                        spacing: 0
+
+                        // Waveform визуализация
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 70
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 3
+                                Repeater {
+                                    model: 18
+                                    Rectangle {
+                                        required property int index
+                                        width: 4
+                                        height: 8 + Math.abs(Math.sin(index * 1.3)) * 34
+                                        radius: 2
+                                        color: page.audioPath !== "" ? Theme.accent : Theme.borderLight
+                                        opacity: 0.7
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        SequentialAnimation on opacity {
+                                            loops: Animation.Infinite
+                                            running: page.audioPath === ""
+                                            PauseAnimation { duration: index * 100 }
+                                            NumberAnimation { to: 1.0; duration: 300 }
+                                            NumberAnimation { to: 0.4; duration: 300 }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Item { Layout.fillHeight: true }
 
                         Text {
                             Layout.alignment: Qt.AlignHCenter
@@ -71,16 +110,20 @@ Item {
                             font.weight: Font.DemiBold
                         }
 
+                        Item { Layout.preferredHeight: Theme.spaceM }
+
                         Rectangle {
                             Layout.alignment: Qt.AlignHCenter
-                            width: 140
-                            height: 32
+                            width: 180
+                            height: 40
                             radius: Theme.radiusSmall
-                            color: Theme.accent
+                            color: Theme.surfaceElevated
+                            border.color: Theme.borderLight
+                            border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: "Выбрать файл"
-                                color: "#FFFFFF"
+                                color: Theme.accent
                                 font.family: Theme.fontFamily
                                 font.pixelSize: Theme.fontSmall
                                 font.weight: Font.DemiBold
@@ -88,6 +131,8 @@ Item {
                             HoverHandler { cursorShape: Qt.PointingHandCursor }
                             TapHandler { onTapped: audioDialog.open() }
                         }
+
+                        Item { Layout.fillHeight: true }
                     }
 
                     DropArea {
@@ -103,52 +148,14 @@ Item {
                     }
                 }
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spaceM
-                    Text { text: "Тактов:"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall }
-                    AppSpinBox { id: barsSpin; from: 1; to: 16; value: 4; Layout.preferredWidth: 140 }
-                    Text { text: "BPM:"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall }
-                    AppSpinBox { id: bpmSpin; from: 60; to: 200; value: 120; Layout.preferredWidth: 140 }
-                    Item { Layout.fillWidth: true }
-
-                    Rectangle {
-                        width: 170; height: 40
-                        radius: Theme.radiusSmall
-                        color: analyzeBtn.pressed ? Theme.accentHover : Theme.surfaceHover
-                        border.color: Theme.border
-                        border.width: 1
-
-                        RowLayout {
-                            anchors.centerIn: parent
-                            spacing: 6
-                            Text {
-                                text: "\uE9D9"
-                                color: Theme.accent
-                                font.family: Theme.iconFamily
-                                font.pixelSize: 13
-                            }
-                            Text {
-                                text: "Analyze Audio"
-                                color: Theme.accent
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSmall
-                                font.weight: Font.DemiBold
-                            }
-                        }
-
-                        HoverHandler { cursorShape: Qt.PointingHandCursor }
-                        TapHandler { id: analyzeBtn; onTapped: page.analyze() }
-                    }
-                }
-
+                // Результаты анализа
                 Rectangle {
                     Layout.fillWidth: true
                     visible: page.analyzed
-                    implicitHeight: resultCol.implicitHeight + Theme.spaceM * 2
-                    radius: Theme.radiusSmall
-                    color: Qt.rgba(1.0, 0.478, 0.102, 0.08)
-                    border.color: Qt.rgba(1.0, 0.478, 0.102, 0.3)
+                    implicitHeight: resultCol.implicitHeight + Theme.spaceL * 2
+                    radius: Theme.radiusLarge
+                    color: Theme.surface
+                    border.color: Theme.border
                     border.width: 1
 
                     ColumnLayout {
@@ -156,92 +163,103 @@ Item {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
-                        anchors.margins: Theme.spaceM
-                        spacing: 8
+                        anchors.margins: Theme.spaceL
+                        spacing: Theme.spaceM
 
-                        Text {
-                            text: "Результаты анализа"
-                            color: Theme.accent
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSmall
-                            font.weight: Font.DemiBold
+                        RowLayout {
+                            spacing: Theme.spaceS
+                            Rectangle { width: 4; height: 14; radius: 2; color: Theme.accent }
+                            Text {
+                                text: "Результаты анализа"
+                                color: Theme.textPrimary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontH3
+                                font.weight: Font.DemiBold
+                            }
                         }
 
                         RowLayout {
                             spacing: Theme.spaceL
-
                             ColumnLayout {
                                 spacing: 2
-                                Text {
-                                    text: "BPM"
-                                    color: Theme.textSecondary
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 10
-                                }
-                                Text {
-                                    text: page.detectedBpm.toFixed(1)
-                                    color: Theme.textPrimary
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 22
-                                    font.weight: Font.Bold
-                                }
+                                Text { text: "BPM"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTiny }
+                                Text { text: page.detectedBpm.toFixed(1); color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: 26; font.weight: Font.Bold }
                             }
-
-                            Rectangle { width: 1; height: 40; color: Theme.border }
-
+                            Rectangle { width: 1; height: 50; color: Theme.border }
                             ColumnLayout {
                                 spacing: 2
-                                Text {
-                                    text: "Тональность"
-                                    color: Theme.textSecondary
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 10
-                                }
-                                Text {
-                                    text: page.detectedKey
-                                    color: Theme.textPrimary
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 22
-                                    font.weight: Font.Bold
-                                }
+                                Text { text: "Тональность"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTiny }
+                                Text { text: page.detectedKey; color: Theme.textPrimary; font.family: Theme.fontFamily; font.pixelSize: 26; font.weight: Font.Bold }
                             }
-
-                            Rectangle { width: 1; height: 40; color: Theme.border }
-
+                            Rectangle { width: 1; height: 50; color: Theme.border }
                             ColumnLayout {
                                 spacing: 2
-                                Text {
-                                    text: "Уверенность"
-                                    color: Theme.textSecondary
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 10
-                                }
+                                Text { text: "Уверенность"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontTiny }
                                 Text {
                                     text: Math.round(page.detectedConfidence * 100) + "%"
                                     color: page.detectedConfidence > 0.7 ? Theme.success
                                          : (page.detectedConfidence > 0.4 ? Theme.accent : Theme.error)
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 22
-                                    font.weight: Font.Bold
+                                    font.family: Theme.fontFamily; font.pixelSize: 26; font.weight: Font.Bold
                                 }
                             }
-
                             Item { Layout.fillWidth: true }
                         }
+                    }
+                }
+            }
+
+            // Правая колонка
+            ColumnLayout {
+                Layout.preferredWidth: 400
+                Layout.fillHeight: true
+                spacing: Theme.spaceL
+
+                CardWithPreview {
+                    Layout.fillWidth: true
+                    title: "Параметры"
+                    description: "Количество тактов и BPM. После Analyze — обновится автоматически."
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spaceM
+                        Text { text: "Тактов:"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall }
+                        AppSpinBox { id: barsSpin; from: 1; to: 16; value: 4; Layout.fillWidth: true }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spaceM
+                        Text { text: "BPM:"; color: Theme.textSecondary; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall }
+                        AppSpinBox { id: bpmSpin; from: 60; to: 200; value: 120; Layout.fillWidth: true }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 40
+                        radius: Theme.radiusSmall
+                        color: analyzeBtn.pressed ? Theme.surfaceHover : Theme.surfaceElevated
+                        border.color: Theme.borderLight
+                        border.width: 1
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Text { text: "\uE9D9"; color: Theme.accentCyan; font.family: Theme.iconFamily; font.pixelSize: 13 }
+                            Text { text: "Analyze Audio"; color: Theme.accentCyan; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall; font.weight: Font.DemiBold }
+                        }
+                        HoverHandler { cursorShape: Qt.PointingHandCursor }
+                        TapHandler { id: analyzeBtn; onTapped: page.analyze() }
                     }
                 }
 
                 Item { Layout.fillHeight: true }
 
                 Rectangle {
+                    id: genBeatBtn
                     Layout.fillWidth: true
-                    height: 52
+                    Layout.preferredHeight: 52
                     radius: Theme.radius
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0; color: Theme.accentStart }
-                        GradientStop { position: 1.0; color: Theme.accentEnd }
-                    }
+                    color: genBeatHov.hovered ? Theme.accentHover : Theme.accent
+                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
                     Text {
                         anchors.centerIn: parent
                         text: "Сгенерировать бит"
@@ -250,42 +268,32 @@ Item {
                         font.pixelSize: Theme.fontH3
                         font.weight: Font.DemiBold
                     }
-                    HoverHandler { cursorShape: Qt.PointingHandCursor }
+                    HoverHandler { id: genBeatHov; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: page.askSave() }
                 }
-            }
-        }
-
-        // Статус-бар
-        Rectangle {
-            Layout.fillWidth: true
-            height: 36
-            radius: Theme.radiusSmall
-            color: Theme.surface
-            border.color: Theme.border
-            border.width: 1
-            visible: page.status !== ""
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Theme.spaceM
-                anchors.rightMargin: Theme.spaceM
-                spacing: Theme.spaceS
 
                 Rectangle {
-                    width: 8
-                    height: 8
-                    radius: 4
-                    color: page.statusError ? Theme.error : Theme.success
-                }
-
-                Text {
                     Layout.fillWidth: true
-                    text: page.status
-                    color: page.statusError ? Theme.error : Theme.textPrimary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSmall
-                    elide: Text.ElideRight
+                    height: 36
+                    radius: Theme.radiusSmall
+                    color: Theme.surfaceHover
+                    border.color: Theme.border
+                    border.width: 1
+                    visible: page.status !== ""
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.spaceM
+                        anchors.rightMargin: Theme.spaceM
+                        spacing: Theme.spaceS
+                        Rectangle { width: 8; height: 8; radius: 4; color: page.statusError ? Theme.error : Theme.success }
+                        Text {
+                            Layout.fillWidth: true
+                            text: page.status
+                            color: page.statusError ? Theme.error : Theme.textPrimary
+                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSmall
+                            elide: Text.ElideRight
+                        }
+                    }
                 }
             }
         }
@@ -312,13 +320,8 @@ Item {
     }
 
     function analyze() {
-        if (!page.audioPath) {
-            page.status = "Сначала выбери файл"
-            page.statusError = true
-            return
-        }
-        page.status = "Анализирую..."
-        page.statusError = false
+        if (!page.audioPath) { page.status = "Сначала выбери файл"; page.statusError = true; return }
+        page.status = "Анализирую..."; page.statusError = false
         var r = backend.analyzeAudio(page.audioPath)
         if (r.ok) {
             page.detectedBpm = r.bpm
@@ -336,11 +339,7 @@ Item {
     }
 
     function askSave() {
-        if (!page.audioPath) {
-            page.status = "Сначала выбери файл"
-            page.statusError = true
-            return
-        }
+        if (!page.audioPath) { page.status = "Сначала выбери файл"; page.statusError = true; return }
         var ts = Math.floor(Date.now() / 1000)
         saveBeatDialog.currentFile = "file:///beat_" + ts + ".wav"
         saveBeatDialog.open()
@@ -348,12 +347,7 @@ Item {
 
     function doGenerate(path) {
         var r = backend.generateBeatTo(page.audioPath, barsSpin.value, bpmSpin.value, path)
-        if (r.ok) {
-            page.status = "Сохранено: " + r.path
-            page.statusError = false
-        } else {
-            page.status = "Ошибка: " + r.error
-            page.statusError = true
-        }
+        if (r.ok) { page.status = "Сохранено: " + r.path; page.statusError = false }
+        else { page.status = "Ошибка: " + r.error; page.statusError = true }
     }
 }

@@ -1,18 +1,19 @@
 """
 Backend NebulaTools — мост QML ↔ Python.
-Конвертер (только нативный) + Сэмплы + Мелодии + Битмейкер.
+Конвертер + Сэмплы + Мелодии + Битмейкер + Стемы + QSettings + Автообновление.
 """
 import re
+import sys
 import tempfile
 import zipfile
-import sys
+import threading
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Signal, Slot, Property, QThread, QUrl
+from PySide6.QtCore import QObject, Signal, Slot, Property, QThread, QUrl, QSettings
 
 
 APP_NAME = "NebulaTools"
-APP_VERSION = "2.6.0"
+APP_VERSION = "2.7.0"
 AUTHOR_HANDLE = "@youngweepo"
 AUTHOR_URL = "https://t.me/youngweepo"
 CHANNEL_HANDLE = "@nebulatools"
@@ -70,11 +71,9 @@ class ConvertWorker(QThread):
             else:
                 raise ValueError(f"Неподдерживаемый формат: {ext}")
 
-            # Отчёт с автором
             if self.options.get("make_report", False):
                 import datetime
                 rep = dst.with_name(dst.stem + "_report.txt")
-
                 src_version = "?"
                 try:
                     with open(src, "rb") as f:
@@ -108,7 +107,7 @@ class ConvertWorker(QThread):
             self.finished.emit(str(dst))
 
         except Exception as e:
-            log(f"Ошибка: {e}")
+            log(f"Ошибка конвертации: {e}")
             self.error.emit(str(e))
 
     def _convert_single_flp(self, src, dst):
@@ -129,7 +128,7 @@ class ConvertWorker(QThread):
         except Exception as e:
             log(f"✗ native упал: {e}")
 
-        log("→ flp_core (только версия)")
+        log("→ flp_core (только смена версии)")
         from flp_core import convert_flp_file
         self.progress.emit(30)
         convert_flp_file(str(src), str(dst), self.target_version)
@@ -232,28 +231,27 @@ class ConverterBackend(QObject):
     error = Signal(str)
     cancelled = Signal()
 
-    updateAvailable = Signal(str, str)    # version, url
-    updateProgress = Signal(int)          # 0..100
-    updateInstalling = Signal()
-
     themeChanged = Signal()
     targetVersionChanged = Signal()
     outputDirChanged = Signal()
 
+    updateAvailable = Signal(str, str)
+    updateProgress = Signal(int)
+    updateInstalling = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # QSettings — сохраняет в реестр Windows
-        from PySide6.QtCore import QSettings
         self._settings = QSettings("NebulaTools", "FLPConverter")
 
-        # Загружаем сохранённые настройки
         self._file_path = ""
         self._target_version = self._settings.value("target_version", "24.1.0.4225", type=str)
         self._output_dir = self._settings.value(
             "output_dir", str(Path.home() / "Desktop"), type=str
         )
         self._theme = self._settings.value("theme", "dark", type=str)
+        self._worker = None
+
         self._update_version = ""
         self._update_url = ""
 
@@ -297,7 +295,6 @@ class ConverterBackend(QObject):
         self._settings.setValue("theme", theme)
         self._settings.sync()
         self.themeChanged.emit()
-        log(f"Сохранена тема: {theme}")
 
     @Slot(str)
     def setTargetVersion(self, version):
@@ -312,7 +309,6 @@ class ConverterBackend(QObject):
         self._settings.setValue("output_dir", dir_path)
         self._settings.sync()
         self.outputDirChanged.emit()
-        log(f"Сохранена папка вывода: {dir_path}")
 
     @Slot()
     def resetSettings(self):
@@ -324,9 +320,8 @@ class ConverterBackend(QObject):
         self.themeChanged.emit()
         self.targetVersionChanged.emit()
         self.outputDirChanged.emit()
-        log("Настройки сброшены")
 
-    # ---------- Анализ файла ----------
+    # ---------- Анализ файла (КЛЮЧЕВОЙ МЕТОД) ----------
     @Slot(str, result="QVariantMap")
     def analyzeFile(self, path_or_url):
         url = QUrl(path_or_url)
@@ -363,6 +358,7 @@ class ConverterBackend(QObject):
         self.fileAnalyzed.emit(info["name"], version, int(size_mb))
         return info
 
+    # ---------- Конвертация ----------
     @Slot("QVariantMap")
     def startConvert(self, options):
         if not self._file_path:
@@ -398,7 +394,7 @@ class ConverterBackend(QObject):
 
     @Slot()
     def openOutputFolder(self):
-        import subprocess, os, sys
+        import subprocess, os
         try:
             if os.name == "nt":
                 subprocess.Popen(["explorer", self._output_dir])
@@ -409,9 +405,7 @@ class ConverterBackend(QObject):
         except Exception:
             pass
 
-    # ============================================================
-    #  СЭМПЛЫ
-    # ============================================================
+    # ---------- Сэмплы ----------
     @Slot(str, int, result="QVariantList")
     def searchSamples(self, query, limit=20):
         try:
@@ -444,12 +438,10 @@ class ConverterBackend(QObject):
             target = target_path.replace("file:///", "").replace("file://", "")
             out_path = Path(target)
             out_path.parent.mkdir(parents=True, exist_ok=True)
-
             urllib.request.urlretrieve(url, str(out_path))
             log(f"Скачан: {out_path}")
             return {"ok": True, "path": str(out_path)}
         except Exception as e:
-            log(f"downloadSampleTo ошибка: {e}")
             return {"ok": False, "error": str(e)}
 
     @Slot(str, str, result="QVariantMap")
@@ -457,22 +449,15 @@ class ConverterBackend(QObject):
         try:
             import urllib.request
             from nebula_modules import player
-
             dest = Path(tempfile.gettempdir()) / "NebulaTools" / "preview"
             dest.mkdir(parents=True, exist_ok=True)
-
-            safe_name = "".join(c for c in name[:40]
-                                if c.isalnum() or c in " -_") or "sample"
+            safe_name = "".join(c for c in name[:40] if c.isalnum() or c in " -_") or "sample"
             out_path = dest / f"{safe_name}.mp3"
-
             if not out_path.exists():
                 urllib.request.urlretrieve(url, str(out_path))
-
             player.play(out_path)
-            log(f"previewSample: {out_path.name}")
             return {"ok": True, "path": str(out_path)}
         except Exception as e:
-            log(f"previewSample ошибка: {e}")
             return {"ok": False, "error": str(e)}
 
     @Slot()
@@ -480,70 +465,42 @@ class ConverterBackend(QObject):
         try:
             from nebula_modules import player
             player.stop()
-            log("stopPreview")
-        except Exception as e:
-            log(f"stopPreview ошибка: {e}")
+        except Exception:
+            pass
 
-    # ============================================================
-    #  МЕЛОДИИ
-    # ============================================================
+    # ---------- Мелодии ----------
     @Slot(str, str, str, int, int, str, result="QVariantMap")
     def generateMelodyTo(self, key, scale, genre, bars, bpm, target_path):
         try:
             from nebula_modules import melody_module as mel
-
             target = target_path.replace("file:///", "").replace("file://", "")
             out_path = Path(target)
             out_path.parent.mkdir(parents=True, exist_ok=True)
-
             if out_path.suffix.lower() not in (".mid", ".midi"):
                 out_path = out_path.with_suffix(".mid")
-
             mel.generate_melody(
                 key=key, scale=scale, genre=genre,
                 bars=int(bars), bpm=int(bpm), output=str(out_path)
             )
-            log(f"generateMelodyTo: {out_path}")
             return {"ok": True, "path": str(out_path)}
         except Exception as e:
-            log(f"generateMelodyTo ошибка: {e}")
             return {"ok": False, "error": str(e)}
 
-    # ============================================================
-    #  БИТМЕЙКЕР
-    # ============================================================
+    # ---------- Битмейкер ----------
     @Slot(str, int, int, str, result="QVariantMap")
     def generateBeatTo(self, audio_path, bars, bpm, target_path):
         try:
             from nebula_modules import beatmaker_module as bm
-
             src = audio_path.replace("file:///", "").replace("file://", "")
             if not Path(src).exists():
                 return {"ok": False, "error": f"Файл не найден: {src}"}
-
             target = target_path.replace("file:///", "").replace("file://", "")
             out_path = Path(target)
             out_path.parent.mkdir(parents=True, exist_ok=True)
-
             if out_path.suffix.lower() != ".wav":
                 out_path = out_path.with_suffix(".wav")
-
-            result_path = bm.shuffle_beat(
-                src, divisions=4, repeats=2, output_path=str(out_path)
-            )
-            log(f"generateBeatTo: {result_path}")
+            result_path = bm.shuffle_beat(src, divisions=4, repeats=2, output_path=str(out_path))
             return {"ok": True, "path": str(result_path)}
-        except Exception as e:
-            log(f"generateBeatTo ошибка: {e}")
-            return {"ok": False, "error": str(e)}
-
-    @Slot(str, result="QVariantMap")
-    def detectBpm(self, audio_path):
-        try:
-            from nebula_modules import beatmaker_module as bm
-            src = audio_path.replace("file:///", "").replace("file://", "")
-            bpm = bm.detect_bpm(src)
-            return {"ok": True, "bpm": round(bpm, 1)}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -554,30 +511,38 @@ class ConverterBackend(QObject):
             src = audio_path.replace("file:///", "").replace("file://", "")
             if not Path(src).exists():
                 return {"ok": False, "error": f"Файл не найден: {src}"}
-
-            log(f"analyzeAudio: {src}")
             bpm = bm.detect_bpm(src)
-            key, mode, score = bm.detect_key(src)
-            log(f"  BPM: {bpm:.1f}, Key: {key} {mode} (score {score:.2f})")
-
+            key, mode, conf = bm.detect_key(src)
             return {
                 "ok": True,
                 "bpm": round(bpm, 1),
                 "key": f"{key} {mode}",
-                "confidence": round(score, 2),
+                "confidence": round(conf, 2),
             }
         except Exception as e:
-            log(f"analyzeAudio ошибка: {e}")
             return {"ok": False, "error": str(e)}
 
-    # ============================================================
-    #  АВТООБНОВЛЕНИЕ
-    # ============================================================
+    # ---------- Стемы ----------
+    @Slot(str, str, str, result="QVariantMap")
+    def separateStems(self, audio_path, output_dir, model):
+        try:
+            from nebula_modules import stem_separator as ss
+            src = audio_path.replace("file:///", "").replace("file://", "")
+            if not Path(src).exists():
+                return {"ok": False, "error": f"Файл не найден: {src}"}
+            out = output_dir.replace("file:///", "").replace("file://", "")
+            out_path = Path(out)
+            out_path.mkdir(parents=True, exist_ok=True)
+            stems = ss.separate_stems(src, str(out_path), model)
+            return {"ok": True, "stems": stems}
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {"ok": False, "error": str(e)}
+
+    # ---------- Автообновление ----------
     @Slot()
     def checkUpdates(self):
-        """Проверяет обновления в фоне. Если есть — эмитит updateAvailable."""
-        import threading
-
         def _check():
             try:
                 if getattr(sys, "frozen", False):
@@ -586,32 +551,22 @@ class ConverterBackend(QObject):
                     app_dir = Path(__file__).parent
                 if str(app_dir) not in sys.path:
                     sys.path.insert(0, str(app_dir))
-
                 import importlib
                 import updater as upd
                 importlib.reload(upd)
-
                 has, url, ver = upd.check_for_updates()
                 if has:
                     self._update_version = ver
                     self._update_url = url
-                    log(f"Доступно обновление: {ver}")
                     self.updateAvailable.emit(ver, url)
-                else:
-                    log("Обновлений нет")
             except Exception as e:
                 log(f"checkUpdates: {e}")
-
         threading.Thread(target=_check, daemon=True).start()
 
     @Slot()
     def installUpdate(self):
-        """Скачивает и ставит обновление в фоне, потом закрывает приложение."""
         if not self._update_url:
-            self.error.emit("Нет URL обновления")
             return
-
-        import threading
 
         def _do():
             try:
@@ -621,39 +576,26 @@ class ConverterBackend(QObject):
                     app_dir = Path(__file__).parent
                 if str(app_dir) not in sys.path:
                     sys.path.insert(0, str(app_dir))
-
                 import importlib
                 import updater as upd
                 importlib.reload(upd)
-
                 self.updateInstalling.emit()
-
                 def progress(p):
                     self.updateProgress.emit(p)
-
                 extract_dir = upd.download_update(self._update_url, progress)
-                log(f"Распаковано в {extract_dir}")
-
                 self.updateProgress.emit(100)
                 upd.run_update_script(extract_dir)
-
-                # Даём скрипту время схватить env, потом закрываемся
                 import time
                 time.sleep(1.5)
-
                 from PySide6.QtWidgets import QApplication
                 from PySide6.QtCore import QMetaObject, Qt
                 QMetaObject.invokeMethod(QApplication.instance(), "quit", Qt.QueuedConnection)
-
             except Exception as e:
                 log(f"installUpdate ошибка: {e}")
                 self.error.emit(str(e))
-
         threading.Thread(target=_do, daemon=True).start()
 
-    # ============================================================
-    #  Helpers
-    # ============================================================
+    # ---------- Helpers ----------
     def _read_version(self, path: Path) -> str:
         try:
             if path.suffix.lower() == ".zip":
@@ -667,7 +609,6 @@ class ConverterBackend(QObject):
             else:
                 with open(path, "rb") as f:
                     head = f.read(100)
-
             m = re.search(rb"\b\d{1,2}\.\d{1,2}\.\d{1,4}(?:\.\d{1,6})?\b", head)
             return m.group(0).decode("ascii") if m else "?"
         except Exception as e:
@@ -680,8 +621,7 @@ class ConverterBackend(QObject):
             with zipfile.ZipFile(path) as z:
                 for n in z.namelist():
                     low = n.lower()
-                    if low.endswith((".wav", ".mp3", ".ogg", ".flac",
-                                     ".aiff", ".aif")):
+                    if low.endswith((".wav", ".mp3", ".ogg", ".flac", ".aiff", ".aif")):
                         info["audio"] += 1
                     if any(k in low for k in ("sample", "samples", "pack")):
                         info["samples"] += 1

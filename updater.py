@@ -19,7 +19,7 @@ except ImportError:
 
 
 GITHUB_REPO = "Missyrimm/NebulaTools"
-CURRENT_VERSION = "2.6.0"
+CURRENT_VERSION = "2.7.0"
 APP_NAME = "NebulaTools"
 
 ASSETS = {
@@ -83,23 +83,34 @@ def check_for_updates():
         return False, None, None
 
 
-def _extract(archive, url, tmp_dir):
-    """Распаковка архива — поддерживает .zip, .7z, .tar.gz."""
+def _extract(archive, url, tmp_dir, progress_callback=None):
+    """Распаковка архива с прогрессом."""
     extract_dir = tmp_dir / "extracted"
     extract_dir.mkdir(exist_ok=True)
-
     log(f"Распаковка → {extract_dir}")
 
-    if url.endswith(".zip"):
-        with zipfile.ZipFile(archive, "r") as z:
-            z.extractall(extract_dir)
-    elif url.endswith(".7z"):
-        import py7zr
-        with py7zr.SevenZipFile(archive, "r") as z:
-            z.extractall(extract_dir)
-    else:
-        with tarfile.open(archive, "r:gz") as t:
-            t.extractall(extract_dir)
+    if progress_callback:
+        progress_callback(90)  # Начинаем с 90%
+
+    try:
+        if url.endswith(".zip"):
+            import zipfile
+            with zipfile.ZipFile(archive, "r") as z:
+                z.extractall(extract_dir)
+        elif url.endswith(".7z"):
+            import py7zr
+            with py7zr.SevenZipFile(archive, "r") as z:
+                z.extractall(extract_dir)
+        else:
+            import tarfile
+            with tarfile.open(archive, "r:gz") as t:
+                t.extractall(extract_dir)
+    except Exception as e:
+        log(f"Ошибка распаковки: {e}")
+        raise
+
+    if progress_callback:
+        progress_callback(100)
 
     archive.unlink()
     return extract_dir
@@ -133,7 +144,12 @@ def download_update(url, progress_callback=None):
             for chunk in r.iter_content(65536):
                 if chunk:
                     f.write(chunk)
-        return _extract(archive, url, tmp_dir)
+    # После загрузки — распаковка с прогрессом 70-100%
+    def unpack_progress(p):
+        if progress_callback:
+            progress_callback(70 + int(p * 0.3))
+
+    return _extract(archive, url, tmp_dir, progress_callback=unpack_progress)
 
     # Многопоточная
     NUM_THREADS = 8
